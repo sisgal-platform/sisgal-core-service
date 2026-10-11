@@ -9,11 +9,8 @@ import { WorkdayConfigService } from './workday-config.service';
 
 import { RegistrarJornadaLaboralCommand } from '../commands/workday-config.commands';
 import { VigenciaSuperpuestaError } from '../../domain/errors/vigencia-superpuesta.error';
-import {
-  WORKDAY_CONFIG_REPOSITORY_PORT,
-  type CierreDeVersion,
-} from '../../domain/ports/workday-config.repository.port';
-import { aFechaCalendario } from '../../domain/vigencia';
+import { WORKDAY_CONFIG_REPOSITORY_PORT } from '../../domain/ports/workday-config.repository.port';
+import { aFechaCalendario, type CierreDeVersion } from '../../domain/vigencia';
 
 import { AUDIT_PORT } from 'src/application/ports/audit/audit.port';
 import { Role } from 'src/application/ports/auth/auth-user';
@@ -397,7 +394,7 @@ describe('WorkdayConfigService', () => {
 
     it('debe traducir la superposición detectada por la base de datos a ConflictException', async () => {
       workdayConfigRepositoryMock.registrarVersion.mockRejectedValue(
-        new VigenciaSuperpuestaError(),
+        new VigenciaSuperpuestaError('la jornada laboral'),
       );
 
       await expect(service.registrar(crearCommand(), actor)).rejects.toThrow(

@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 
 import { RegisterWorkdayConfigDto } from './register-workday-config.dto';
-import { WorkdayConfigVigenteQueryDto } from './workday-config-vigente-query.dto';
+import { VigenciaQueryDto } from './vigencia-query.dto';
 
 /**
  * Ejercita los DTOs con la misma configuración del ValidationPipe global de
@@ -169,19 +169,19 @@ describe('DTOs de jornada laboral', () => {
   });
 
   // =========================================================
-  // WorkdayConfigVigenteQueryDto
+  // VigenciaQueryDto
   // =========================================================
 
-  describe('WorkdayConfigVigenteQueryDto', () => {
+  describe('VigenciaQueryDto', () => {
     it('debe aceptar la consulta sin fecha', async () => {
-      await expect(
-        mensajes(WorkdayConfigVigenteQueryDto, {}, 'query'),
-      ).resolves.toEqual([]);
+      await expect(mensajes(VigenciaQueryDto, {}, 'query')).resolves.toEqual(
+        [],
+      );
     });
 
     it('debe aceptar una fecha con formato YYYY-MM-DD', async () => {
       const dto = await validar(
-        WorkdayConfigVigenteQueryDto,
+        VigenciaQueryDto,
         { fecha: '2026-03-15' },
         'query',
       );
@@ -191,11 +191,7 @@ describe('DTOs de jornada laboral', () => {
 
     it('debe rechazar una fecha inválida', async () => {
       await expect(
-        mensajes(
-          WorkdayConfigVigenteQueryDto,
-          { fecha: '2026-13-01' },
-          'query',
-        ),
+        mensajes(VigenciaQueryDto, { fecha: '2026-13-01' }, 'query'),
       ).resolves.toContain('La fecha debe ser una fecha válida.');
     });
   });
