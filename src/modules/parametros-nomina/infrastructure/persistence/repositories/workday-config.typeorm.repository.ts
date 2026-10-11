@@ -2,11 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, QueryFailedError, Repository } from 'typeorm';
 import { WorkdayConfig } from 'src/entities';
-import {
-  CierreDeVersion,
-  WorkdayConfigRepositoryPort,
-} from '../../../domain/ports/workday-config.repository.port';
+import { WorkdayConfigRepositoryPort } from '../../../domain/ports/workday-config.repository.port';
 import { VigenciaSuperpuestaError } from '../../../domain/errors/vigencia-superpuesta.error';
+import { CierreDeVersion } from '../../../domain/vigencia';
 
 /** Código de PostgreSQL para violación de restricción de exclusión. */
 const PG_EXCLUSION_VIOLATION = '23P01';
@@ -93,7 +91,7 @@ export class WorkdayConfigTypeOrmRepository implements WorkdayConfigRepositoryPo
       (error.driverError as { code?: string } | undefined)?.code ===
         PG_EXCLUSION_VIOLATION
     ) {
-      return new VigenciaSuperpuestaError();
+      return new VigenciaSuperpuestaError('la jornada laboral');
     }
 
     return error;

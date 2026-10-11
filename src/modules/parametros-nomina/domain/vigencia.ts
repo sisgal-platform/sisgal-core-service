@@ -5,6 +5,12 @@ export enum EstadoVigencia {
   HISTORICA = 'HISTORICA',
 }
 
+/** Cierre de la versión anterior: su vigencia termina el día previo al inicio de la nueva. */
+export interface CierreDeVersion {
+  readonly id: number;
+  readonly validTo: Date;
+}
+
 /**
  * Fecha calendario (YYYY-MM-DD) de una columna `date`. TypeORM la entrega como
  * texto al consultar, aunque la entidad la declare como Date.

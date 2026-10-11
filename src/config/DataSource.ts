@@ -23,6 +23,7 @@ import { AddDisabilityLeaveOtherTypeDescription1791060844659 } from '../migratio
 import { AllowIncompleteAttendanceRecord1791119213000 } from '../migrations/1791119213000-AllowIncompleteAttendanceRecord';
 import { AddPayrollPeriodIndexes1791200000000 } from '../migrations/1791200000000-AddPayrollPeriodIndexes';
 import { VersionWorkdayConfigValidity1791720000000 } from '../migrations/1791720000000-VersionWorkdayConfigValidity';
+import { VersionWorkRateConfigValidity1791730000000 } from '../migrations/1791730000000-VersionWorkRateConfigValidity';
 import { EmployeeLoan, Holiday } from 'src/entities';
 
 export const dataSourceOptions: DataSourceOptions = {
@@ -58,6 +59,7 @@ export const dataSourceOptions: DataSourceOptions = {
     AllowIncompleteAttendanceRecord1791119213000,
     AddPayrollPeriodIndexes1791200000000,
     VersionWorkdayConfigValidity1791720000000,
+    VersionWorkRateConfigValidity1791730000000,
   ],
 };
 

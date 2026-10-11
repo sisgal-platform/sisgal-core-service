@@ -1,14 +1,9 @@
 import { WorkdayConfig } from '../../../../entities/workday-config.model';
+import { CierreDeVersion } from '../vigencia';
 
 export const WORKDAY_CONFIG_REPOSITORY_PORT = Symbol(
   'WORKDAY_CONFIG_REPOSITORY_PORT',
 );
-
-/** Cierre de la versión anterior: su vigencia termina el día previo al inicio de la nueva. */
-export interface CierreDeVersion {
-  readonly id: number;
-  readonly validTo: Date;
-}
 
 export interface WorkdayConfigRepositoryPort {
   /** Todas las versiones, de la más reciente a la más antigua. */
