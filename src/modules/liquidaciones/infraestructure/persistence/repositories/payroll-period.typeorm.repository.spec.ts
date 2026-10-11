@@ -84,7 +84,9 @@ describe('PayrollPeriodTypeOrmRepository', () => {
       expect(payrollPeriodRepositoryMock.findOne).toHaveBeenCalledWith({
         where: { id: 1 },
         relations: {
-          employee: true,
+          employee: {
+            jobPosition: true,
+          },
           payroll_lines: true,
         },
       });

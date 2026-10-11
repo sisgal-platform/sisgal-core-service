@@ -4,6 +4,7 @@ import { PayrollPeriodController } from './payroll-period.controller';
 import { PayrollPeriodService } from 'src/modules/liquidaciones/application/services/payroll-period.service';
 import { PayrollPeriod } from 'src/entities/payroll-period.model';
 import { Employee } from 'src/entities/employee.model';
+import { Position } from 'src/entities/position.model';
 import { PayrollLine } from 'src/entities/payroll_line.model';
 
 import { Role } from 'src/application/ports/auth/auth-user';
@@ -138,6 +139,35 @@ describe('PayrollPeriodController', () => {
       ]);
     });
 
+    it('debe incluir el documento y el cargo del empleado', async () => {
+      payrollPeriodServiceMock.findById.mockResolvedValue(crearLiquidacion());
+
+      const resultado = await controller.findById(1);
+
+      expect(resultado.employeeDocumentType).toBe('CC');
+      expect(resultado.employeeDocument).toBe('1020304050');
+      expect(resultado.employeePosition).toBe('Mesero');
+    });
+
+    it('debe retornar el cargo en null cuando el empleado no tiene uno asignado', async () => {
+      payrollPeriodServiceMock.findById.mockResolvedValue(
+        crearLiquidacion({
+          employee: Object.assign(new Employee(), {
+            id: 1,
+            firstName: 'Juan',
+            lastName: 'Pérez',
+            document_type: 'CC',
+            document: '1020304050',
+            jobPosition: null,
+          }),
+        }),
+      );
+
+      const resultado = await controller.findById(1);
+
+      expect(resultado.employeePosition).toBeNull();
+    });
+
     it('debe consultar el servicio con el identificador recibido', async () => {
       payrollPeriodServiceMock.findById.mockResolvedValue(crearLiquidacion());
 
@@ -171,6 +201,9 @@ function crearLiquidacion(overrides: Partial<PayrollPeriod> = {}): PayrollPeriod
       id: 1,
       firstName: 'Juan',
       lastName: 'Pérez',
+      document_type: 'CC',
+      document: '1020304050',
+      jobPosition: Object.assign(new Position(), { id: 1, name: 'Mesero' }),
     }),
     payroll_lines: [],
     ...overrides,

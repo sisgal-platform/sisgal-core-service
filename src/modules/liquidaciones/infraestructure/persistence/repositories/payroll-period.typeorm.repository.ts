@@ -38,7 +38,9 @@ export class PayrollPeriodTypeOrmRepository implements PayrollPeriodRepositoryPo
         return this.repository.findOne({
             where: { id },
             relations: {
-                employee: true,
+                employee: {
+                    jobPosition: true,
+                },
                 payroll_lines: true,
             },
         });
