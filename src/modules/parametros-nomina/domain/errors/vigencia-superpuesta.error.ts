@@ -5,9 +5,10 @@
  * exponer detalles del motor.
  */
 export class VigenciaSuperpuestaError extends Error {
-  constructor() {
+  /** @param parametro Parámetro afectado, p. ej. "la jornada laboral". */
+  constructor(parametro: string) {
     super(
-      'El período de vigencia se superpone con el de otra versión de la jornada laboral.',
+      `El período de vigencia se superpone con el de otra versión de ${parametro}.`,
     );
     this.name = 'VigenciaSuperpuestaError';
   }

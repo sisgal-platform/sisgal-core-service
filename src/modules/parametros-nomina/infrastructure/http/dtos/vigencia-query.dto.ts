@@ -1,7 +1,7 @@
 import { IsDateString, IsOptional, Matches } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
-export class WorkdayConfigVigenteQueryDto {
+export class VigenciaQueryDto {
   @ApiPropertyOptional({
     description:
       'Fecha para la que se consulta la versión vigente (YYYY-MM-DD). Si no se proporciona, se usa la fecha actual.',

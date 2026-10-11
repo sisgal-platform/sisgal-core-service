@@ -25,7 +25,7 @@ import { WorkdayConfigService } from '../../../application/services/workday-conf
 import {
   RegisterWorkdayConfigDto,
   WorkdayConfigResponseDto,
-  WorkdayConfigVigenteQueryDto,
+  VigenciaQueryDto,
 } from '../dtos';
 import { ErrorResponseDto } from 'src/shared/infraestructure/http/dtos';
 import { JwtAuthGuard } from 'src/infraestructure/auth/guards/jwt-auth.guard';
@@ -96,7 +96,7 @@ export class WorkdayConfigController {
     type: ErrorResponseDto,
   })
   async obtenerVigente(
-    @Query() query: WorkdayConfigVigenteQueryDto,
+    @Query() query: VigenciaQueryDto,
   ): Promise<WorkdayConfigResponseDto> {
     const version = await this.workdayConfigService.obtenerVigente(query.fecha);
 
