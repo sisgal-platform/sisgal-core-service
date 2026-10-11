@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { SystemConfig } from 'src/entities';
 import { SystemConfigRepositoryPort } from 'src/modules/nomina/domain/ports/system-config-repository.port';
 import {
+  IsNull,
   LessThanOrEqual,
   MoreThanOrEqual,
   Repository,
@@ -24,11 +25,19 @@ export class SystemConfigTypeOrmRepository
     payrollDate: Date,
   ): Promise<number | null> {
     const config = await this.repository.findOne({
-      where: {
-        key,
-        valid_from: LessThanOrEqual(payrollDate),
-        valid_to: MoreThanOrEqual(payrollDate),
-      },
+      where: [
+        {
+          key,
+          valid_from: LessThanOrEqual(payrollDate),
+          valid_to: MoreThanOrEqual(payrollDate),
+        },
+        // Una versión sin fecha de fin rige hasta que se registre la siguiente.
+        {
+          key,
+          valid_from: LessThanOrEqual(payrollDate),
+          valid_to: IsNull(),
+        },
+      ],
       order: {
         valid_from: 'DESC',
       },
