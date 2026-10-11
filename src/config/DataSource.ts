@@ -22,6 +22,7 @@ import { AddDisabilityLeaveType1791059891289 } from '../migrations/1791059891289
 import { AddDisabilityLeaveOtherTypeDescription1791060844659 } from '../migrations/1791060844659-AddDisabilityLeaveOtherTypeDescription';
 import { AllowIncompleteAttendanceRecord1791119213000 } from '../migrations/1791119213000-AllowIncompleteAttendanceRecord';
 import { AddPayrollPeriodIndexes1791200000000 } from '../migrations/1791200000000-AddPayrollPeriodIndexes';
+import { VersionWorkdayConfigValidity1791720000000 } from '../migrations/1791720000000-VersionWorkdayConfigValidity';
 import { EmployeeLoan, Holiday } from 'src/entities';
 
 export const dataSourceOptions: DataSourceOptions = {
@@ -56,6 +57,7 @@ export const dataSourceOptions: DataSourceOptions = {
     AddDisabilityLeaveOtherTypeDescription1791060844659,
     AllowIncompleteAttendanceRecord1791119213000,
     AddPayrollPeriodIndexes1791200000000,
+    VersionWorkdayConfigValidity1791720000000,
   ],
 };
 
