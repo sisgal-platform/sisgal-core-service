@@ -1,0 +1,211 @@
+import { Test, TestingModule } from '@nestjs/testing';
+
+import { PayrollPeriodController } from './payroll-period.controller';
+import { PayrollPeriodService } from 'src/modules/liquidaciones/application/services/payroll-period.service';
+import { PayrollPeriod } from 'src/entities/payroll-period.model';
+import { Employee } from 'src/entities/employee.model';
+import { Position } from 'src/entities/position.model';
+import { PayrollLine } from 'src/entities/payroll_line.model';
+
+import { Role } from 'src/application/ports/auth/auth-user';
+import { ROLES_KEY } from 'src/infraestructure/auth/decorators/roles.decorator';
+import { JwtAuthGuard } from 'src/infraestructure/auth/guards/jwt-auth.guard';
+import { RolesGuard } from 'src/infraestructure/auth/guards/roles.guard';
+
+describe('PayrollPeriodController', () => {
+  let controller: PayrollPeriodController;
+
+  const payrollPeriodServiceMock = {
+    findAll: jest.fn(),
+    findById: jest.fn(),
+  };
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [PayrollPeriodController],
+      providers: [
+        {
+          provide: PayrollPeriodService,
+          useValue: payrollPeriodServiceMock,
+        },
+      ],
+    })
+      .overrideGuard(JwtAuthGuard)
+      .useValue({
+        canActivate: jest.fn().mockReturnValue(true),
+      })
+      .overrideGuard(RolesGuard)
+      .useValue({
+        canActivate: jest.fn().mockReturnValue(true),
+      })
+      .compile();
+
+    controller = module.get<PayrollPeriodController>(PayrollPeriodController);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('debe estar definido', () => {
+    expect(controller).toBeDefined();
+  });
+
+  // =========================================================
+  // Seguridad
+  // =========================================================
+
+  describe('seguridad', () => {
+    it('debe exigir autenticación y validación de roles', () => {
+      const guards = Reflect.getMetadata('__guards__', PayrollPeriodController);
+
+      expect(guards).toEqual([JwtAuthGuard, RolesGuard]);
+    });
+
+    it('debe estar restringido al rol administrador', () => {
+      const roles = Reflect.getMetadata(ROLES_KEY, PayrollPeriodController);
+
+      expect(roles).toEqual([Role.ADMINISTRADOR]);
+    });
+  });
+
+  // =========================================================
+  // GET /liquidaciones
+  // =========================================================
+
+  describe('findAll', () => {
+    it('debe retornar las liquidaciones mapeadas al DTO de respuesta', async () => {
+      const liquidacion = crearLiquidacion();
+      payrollPeriodServiceMock.findAll.mockResolvedValue([liquidacion]);
+
+      const resultado = await controller.findAll({});
+
+      expect(resultado).toEqual([
+        expect.objectContaining({
+          id: 1,
+          employeeId: 1,
+          employeeName: 'Juan Pérez',
+          status: 'Confirmada',
+        }),
+      ]);
+    });
+
+    it('debe enviar al servicio los filtros recibidos', async () => {
+      payrollPeriodServiceMock.findAll.mockResolvedValue([]);
+      const query = { employeeId: 3, periodStart: '2026-09-01', periodEnd: '2026-09-30' };
+
+      await controller.findAll(query);
+
+      expect(payrollPeriodServiceMock.findAll).toHaveBeenCalledWith(query);
+    });
+
+    it('debe propagar los errores del servicio', async () => {
+      const error = new Error('Rango inválido');
+      payrollPeriodServiceMock.findAll.mockRejectedValue(error);
+
+      await expect(controller.findAll({})).rejects.toBe(error);
+    });
+  });
+
+  // =========================================================
+  // GET /liquidaciones/:id
+  // =========================================================
+
+  describe('findById', () => {
+    it('debe retornar el detalle con los conceptos separados por tipo', async () => {
+      const liquidacion = crearLiquidacion({
+        payroll_lines: [
+          Object.assign(new PayrollLine(), {
+            concept_name: 'Salario base',
+            type: 'DEVENGADO',
+            amount: 1800000,
+          }),
+          Object.assign(new PayrollLine(), {
+            concept_name: 'Préstamo',
+            type: 'DEDUCCION',
+            amount: 150000,
+          }),
+        ],
+      });
+      payrollPeriodServiceMock.findById.mockResolvedValue(liquidacion);
+
+      const resultado = await controller.findById(1);
+
+      expect(resultado.earnings).toEqual([
+        expect.objectContaining({ conceptName: 'Salario base', amount: 1800000 }),
+      ]);
+      expect(resultado.deductions).toEqual([
+        expect.objectContaining({ conceptName: 'Préstamo', amount: 150000 }),
+      ]);
+    });
+
+    it('debe incluir el documento y el cargo del empleado', async () => {
+      payrollPeriodServiceMock.findById.mockResolvedValue(crearLiquidacion());
+
+      const resultado = await controller.findById(1);
+
+      expect(resultado.employeeDocumentType).toBe('CC');
+      expect(resultado.employeeDocument).toBe('1020304050');
+      expect(resultado.employeePosition).toBe('Mesero');
+    });
+
+    it('debe retornar el cargo en null cuando el empleado no tiene uno asignado', async () => {
+      payrollPeriodServiceMock.findById.mockResolvedValue(
+        crearLiquidacion({
+          employee: Object.assign(new Employee(), {
+            id: 1,
+            firstName: 'Juan',
+            lastName: 'Pérez',
+            document_type: 'CC',
+            document: '1020304050',
+            jobPosition: null,
+          }),
+        }),
+      );
+
+      const resultado = await controller.findById(1);
+
+      expect(resultado.employeePosition).toBeNull();
+    });
+
+    it('debe consultar el servicio con el identificador recibido', async () => {
+      payrollPeriodServiceMock.findById.mockResolvedValue(crearLiquidacion());
+
+      await controller.findById(7);
+
+      expect(payrollPeriodServiceMock.findById).toHaveBeenCalledWith(7);
+    });
+
+    it('debe propagar los errores del servicio', async () => {
+      const error = new Error('No encontrada');
+      payrollPeriodServiceMock.findById.mockRejectedValue(error);
+
+      await expect(controller.findById(99)).rejects.toBe(error);
+    });
+  });
+});
+
+// =========================================================
+// Utilidades
+// =========================================================
+
+function crearLiquidacion(overrides: Partial<PayrollPeriod> = {}): PayrollPeriod {
+  return Object.assign(new PayrollPeriod(), {
+    id: 1,
+    period_start: '2026-09-01',
+    period_end: '2026-09-30',
+    total_earnings: 1800000,
+    total_deductions: 150000,
+    net_pay: 1650000,
+    employee: Object.assign(new Employee(), {
+      id: 1,
+      firstName: 'Juan',
+      lastName: 'Pérez',
+      document_type: 'CC',
+      document: '1020304050',
+      jobPosition: Object.assign(new Position(), { id: 1, name: 'Mesero' }),
+    }),
+    payroll_lines: [],
+    ...overrides,
+  });
+}

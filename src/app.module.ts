@@ -8,6 +8,7 @@ import { LoansModule } from './modules/loans/loans.module';
 import { NominaModule } from './modules/nomina/nomina.module';
 import { DisabilityLeaveModule } from './modules/incapacidades/disability-leave.module';
 import { AsistenciaModule } from './modules/asistencia/asistencia.module';
+import { LiquidacionesModule } from './modules/liquidaciones/liquidaciones.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { AsistenciaModule } from './modules/asistencia/asistencia.module';
     NominaModule,
     DisabilityLeaveModule,
     AsistenciaModule,
+    LiquidacionesModule,
   ],
   controllers: [],
   providers: [],
