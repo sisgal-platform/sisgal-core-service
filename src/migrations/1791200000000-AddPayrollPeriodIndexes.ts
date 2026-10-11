@@ -1,11 +1,9 @@
 import type { MigrationInterface, QueryRunner } from "typeorm";
 
 /**
- * HU20 - Consultar liquidaciones de empleados.
- *
  * Agrega los índices que usa la consulta de liquidaciones: filtro por
- * empleado combinado con el orden por período (CA02-CA05, CA12), y el join
- * con las líneas de la liquidación en el detalle (CA06).
+ * empleado combinado con el orden por período, y el join con las líneas
+ * de la liquidación en el detalle.
  */
 export class AddPayrollPeriodIndexes1791200000000 implements MigrationInterface {
     name = 'AddPayrollPeriodIndexes1791200000000'

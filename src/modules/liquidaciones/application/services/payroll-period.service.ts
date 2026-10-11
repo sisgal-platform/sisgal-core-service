@@ -10,7 +10,7 @@ export class PayrollPeriodService {
     private readonly payrollPeriodRepository: payrollPeriodRepositoryPort.PayrollPeriodRepositoryPort,
   ) {}
 
-  // Consulta de solo lectura: nunca recalcula, solo muestra lo ya liquidado (CA07)
+  // Consulta de solo lectura: nunca recalcula, solo muestra lo ya liquidado
   async findAll(query: ListPayrollPeriodQueryDto): Promise<PayrollPeriod[]> {
     if (
       query.periodStart &&
