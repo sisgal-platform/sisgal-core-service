@@ -70,9 +70,10 @@ export class PayrollPeriodResponseDto {
     dto.periodStart = payrollPeriod.period_start;
     dto.periodEnd = payrollPeriod.period_end;
     dto.settlementDate = payrollPeriod.period_end;
-    dto.totalEarnings = payrollPeriod.total_earnings;
-    dto.totalDeductions = payrollPeriod.total_deductions;
-    dto.netPay = payrollPeriod.net_pay;
+    // TypeORM retorna las columnas decimal como string; se convierten para que el contrato sea numérico
+    dto.totalEarnings = Number(payrollPeriod.total_earnings);
+    dto.totalDeductions = Number(payrollPeriod.total_deductions);
+    dto.netPay = Number(payrollPeriod.net_pay);
     dto.status = 'Confirmada';
     return dto;
   }

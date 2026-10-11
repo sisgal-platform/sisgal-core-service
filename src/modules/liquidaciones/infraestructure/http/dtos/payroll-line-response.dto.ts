@@ -17,7 +17,8 @@ export class PayrollLineResponseDto {
   static fromEntity(payrollLine: PayrollLine): PayrollLineResponseDto {
     const dto = new PayrollLineResponseDto();
     dto.conceptName = payrollLine.concept_name;
-    dto.amount = payrollLine.amount;
+    // TypeORM retorna las columnas decimal como string; se convierte para que el contrato sea numérico
+    dto.amount = Number(payrollLine.amount);
     return dto;
   }
 }
