@@ -24,6 +24,7 @@ import { AllowIncompleteAttendanceRecord1791119213000 } from '../migrations/1791
 import { AddPayrollPeriodIndexes1791200000000 } from '../migrations/1791200000000-AddPayrollPeriodIndexes';
 import { VersionWorkdayConfigValidity1791720000000 } from '../migrations/1791720000000-VersionWorkdayConfigValidity';
 import { VersionWorkRateConfigValidity1791730000000 } from '../migrations/1791730000000-VersionWorkRateConfigValidity';
+import { VersionSystemConfigValidity1791740000000 } from '../migrations/1791740000000-VersionSystemConfigValidity';
 import { EmployeeLoan, Holiday } from 'src/entities';
 
 export const dataSourceOptions: DataSourceOptions = {
@@ -60,6 +61,7 @@ export const dataSourceOptions: DataSourceOptions = {
     AddPayrollPeriodIndexes1791200000000,
     VersionWorkdayConfigValidity1791720000000,
     VersionWorkRateConfigValidity1791730000000,
+    VersionSystemConfigValidity1791740000000,
   ],
 };
 
