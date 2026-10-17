@@ -1,11 +1,16 @@
+import { StreamableFile } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 
 import { PayrollPeriodController } from './payroll-period.controller';
 import { PayrollPeriodService } from 'src/modules/liquidaciones/application/services/payroll-period.service';
+import { PayrollSlipPdfService } from 'src/modules/liquidaciones/application/services/payroll-slip-pdf.service';
 import { PayrollPeriod } from 'src/entities/payroll-period.model';
 import { Employee } from 'src/entities/employee.model';
 import { Position } from 'src/entities/position.model';
 import { PayrollLine } from 'src/entities/payroll_line.model';
+import { EmployeeBranchAssignment } from 'src/entities/employee-branch-assignment.model';
+import { Branch } from 'src/entities/branch.model';
+import { Company } from 'src/entities/company.model';
 
 import { Role } from 'src/application/ports/auth/auth-user';
 import { ROLES_KEY } from 'src/infraestructure/auth/decorators/roles.decorator';
@@ -20,6 +25,10 @@ describe('PayrollPeriodController', () => {
     findById: jest.fn(),
   };
 
+  const payrollSlipPdfServiceMock = {
+    generate: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [PayrollPeriodController],
@@ -27,6 +36,10 @@ describe('PayrollPeriodController', () => {
         {
           provide: PayrollPeriodService,
           useValue: payrollPeriodServiceMock,
+        },
+        {
+          provide: PayrollSlipPdfService,
+          useValue: payrollSlipPdfServiceMock,
         },
       ],
     })
@@ -183,6 +196,63 @@ describe('PayrollPeriodController', () => {
       await expect(controller.findById(99)).rejects.toBe(error);
     });
   });
+
+  // =========================================================
+  // GET /liquidaciones/:id/pdf
+  // =========================================================
+
+  describe('generatePdf', () => {
+    function resSpy() {
+      return { set: jest.fn() } as unknown as import('express').Response;
+    }
+
+    it('debe retornar el PDF generado como un StreamableFile', async () => {
+      payrollPeriodServiceMock.findById.mockResolvedValue(crearLiquidacionConSucursal());
+      const pdfBuffer = Buffer.from('%PDF-1.4');
+      payrollSlipPdfServiceMock.generate.mockResolvedValue(pdfBuffer);
+
+      const resultado = await controller.generatePdf(1, resSpy());
+
+      expect(resultado).toBeInstanceOf(StreamableFile);
+    });
+
+    it('debe consultar la liquidación por el identificador recibido', async () => {
+      payrollPeriodServiceMock.findById.mockResolvedValue(crearLiquidacionConSucursal());
+      payrollSlipPdfServiceMock.generate.mockResolvedValue(Buffer.from('%PDF-1.4'));
+
+      await controller.generatePdf(7, resSpy());
+
+      expect(payrollPeriodServiceMock.findById).toHaveBeenCalledWith(7);
+    });
+
+    it('debe establecer los encabezados de respuesta como PDF descargable', async () => {
+      payrollPeriodServiceMock.findById.mockResolvedValue(crearLiquidacionConSucursal());
+      payrollSlipPdfServiceMock.generate.mockResolvedValue(Buffer.from('%PDF-1.4'));
+      const res = resSpy();
+
+      await controller.generatePdf(1, res);
+
+      expect(res.set).toHaveBeenCalledWith(
+        expect.objectContaining({ 'Content-Type': 'application/pdf' }),
+      );
+    });
+
+    it('debe propagar los errores de la liquidación no encontrada', async () => {
+      const error = new Error('No encontrada');
+      payrollPeriodServiceMock.findById.mockRejectedValue(error);
+
+      await expect(controller.generatePdf(99, resSpy())).rejects.toBe(error);
+      expect(payrollSlipPdfServiceMock.generate).not.toHaveBeenCalled();
+    });
+
+    it('debe propagar los errores de generación del PDF', async () => {
+      payrollPeriodServiceMock.findById.mockResolvedValue(crearLiquidacionConSucursal());
+      const error = new Error('Fallo al generar el PDF');
+      payrollSlipPdfServiceMock.generate.mockRejectedValue(error);
+
+      await expect(controller.generatePdf(1, resSpy())).rejects.toBe(error);
+    });
+  });
 });
 
 // =========================================================
@@ -206,6 +276,36 @@ function crearLiquidacion(overrides: Partial<PayrollPeriod> = {}): PayrollPeriod
       jobPosition: Object.assign(new Position(), { id: 1, name: 'Mesero' }),
     }),
     payroll_lines: [],
+    ...overrides,
+  });
+}
+
+// Variante con sucursal/compañía asignada, necesaria para los tests de
+// generatePdf (el mapper exige una asignación vigente a la fecha liquidada).
+function crearLiquidacionConSucursal(overrides: Partial<PayrollPeriod> = {}): PayrollPeriod {
+  const sucursal = Object.assign(new Branch(), {
+    name: 'Envigado',
+    city: 'Envigado',
+    address: 'Calle 46 Sur # 42B-16, Zona 7',
+    company: Object.assign(new Company(), { name: 'JS Burguer Parrilla', nit: '' }),
+  });
+  const asignacion = Object.assign(new EmployeeBranchAssignment(), {
+    start_date: '2026-01-01',
+    end_date: null,
+    is_current: true,
+    branch: sucursal,
+  });
+
+  return crearLiquidacion({
+    employee: Object.assign(new Employee(), {
+      id: 1,
+      firstName: 'Juan',
+      lastName: 'Pérez',
+      document_type: 'CC',
+      document: '1020304050',
+      jobPosition: Object.assign(new Position(), { id: 1, name: 'Mesero' }),
+      employee_branch_assig: [asignacion],
+    }),
     ...overrides,
   });
 }
