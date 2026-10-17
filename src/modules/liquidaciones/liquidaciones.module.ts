@@ -5,6 +5,7 @@ import { PayrollPeriodController } from './infraestructure/http/controllers/payr
 import { PayrollPeriodService } from './application/services/payroll-period.service';
 import { PAYROLL_PERIOD_REPOSITORY_PORT } from './domain/ports/payroll-period-repository.port';
 import { PayrollPeriodTypeOrmRepository } from './infraestructure/persistence/repositories/payroll-period.typeorm.repository';
+import { PayrollSlipPdfService } from './application/services/payroll-slip-pdf.service';
 import { AuthModule } from '../../infraestructure/auth/auth.module';
 
 @Module({
@@ -13,6 +14,7 @@ import { AuthModule } from '../../infraestructure/auth/auth.module';
     controllers: [PayrollPeriodController],
     providers: [
         PayrollPeriodService,
+        PayrollSlipPdfService,
         {
             provide: PAYROLL_PERIOD_REPOSITORY_PORT,
             useClass: PayrollPeriodTypeOrmRepository,

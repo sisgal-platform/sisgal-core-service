@@ -40,6 +40,13 @@ export class PayrollPeriodTypeOrmRepository implements PayrollPeriodRepositoryPo
             relations: {
                 employee: {
                     jobPosition: true,
+                    // Necesario para el PDF: la sucursal (y su compañía) vigente en la
+                    // fecha de la liquidación, no necesariamente la actual del empleado.
+                    employee_branch_assig: {
+                        branch: {
+                            company: true,
+                        },
+                    },
                 },
                 payroll_lines: true,
             },
