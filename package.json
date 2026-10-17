@@ -31,6 +31,7 @@
     "dotenv": "^17.4.2",
     "jose": "^6.2.12",
     "nest-winston": "^2.0.0",
+    "pdfkit": "^0.20.2",
     "pg": "^8.23.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
@@ -46,6 +47,7 @@
     "@types/express": "^5.0.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.10.7",
+    "@types/pdfkit": "^0.17.6",
     "@types/supertest": "^6.0.2",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",
@@ -63,38 +65,42 @@
     "typescript-eslint": "^8.20.0"
   },
   "jest": {
-  "moduleFileExtensions": ["js", "json", "ts"],
-  "rootDir": "src",
-  "testRegex": ".*\\.spec\\.ts$",
-  "transform": {
-    "^.+\\.(t|j)s$": "ts-jest"
-  },
-  "coverageDirectory": "../coverage",
-  "collectCoverageFrom": [
-    "**/*.(t|j)s",
-    "!**/*.module.ts",
-    "!**/*.entity.ts",
-    "!**/entities/**",
-    "!**/migrations/**",
-    "!**/database/**",
-    "!**/config/**",
-    "!**/configuration/**",
-    "!**/main.ts"
-  ],
-  "coveragePathIgnorePatterns": [
-    "/node_modules/",
-    "\\.module\\.ts$",
-    "\\.entity\\.ts$",
-    "/entities/",
-    "/migrations/",
-    "/database/",
-    "/config/",
-    "/configuration/",
-    "/main\\.ts$"
-  ],
-  "moduleNameMapper": {
-    "^src/(.*)$": "<rootDir>/$1"
-  },
-  "testEnvironment": "node"
-}
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
+    "rootDir": "src",
+    "testRegex": ".*\\.spec\\.ts$",
+    "transform": {
+      "^.+\\.(t|j)s$": "ts-jest"
+    },
+    "coverageDirectory": "../coverage",
+    "collectCoverageFrom": [
+      "**/*.(t|j)s",
+      "!**/*.module.ts",
+      "!**/*.entity.ts",
+      "!**/entities/**",
+      "!**/migrations/**",
+      "!**/database/**",
+      "!**/config/**",
+      "!**/configuration/**",
+      "!**/main.ts"
+    ],
+    "coveragePathIgnorePatterns": [
+      "/node_modules/",
+      "\\.module\\.ts$",
+      "\\.entity\\.ts$",
+      "/entities/",
+      "/migrations/",
+      "/database/",
+      "/config/",
+      "/configuration/",
+      "/main\\.ts$"
+    ],
+    "moduleNameMapper": {
+      "^src/(.*)$": "<rootDir>/$1"
+    },
+    "testEnvironment": "node"
+  }
 }

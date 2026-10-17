@@ -86,6 +86,11 @@ describe('PayrollPeriodTypeOrmRepository', () => {
         relations: {
           employee: {
             jobPosition: true,
+            employee_branch_assig: {
+              branch: {
+                company: true,
+              },
+            },
           },
           payroll_lines: true,
         },
