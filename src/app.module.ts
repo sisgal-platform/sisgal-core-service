@@ -10,6 +10,7 @@ import { DisabilityLeaveModule } from './modules/incapacidades/disability-leave.
 import { AsistenciaModule } from './modules/asistencia/asistencia.module';
 import { LiquidacionesModule } from './modules/liquidaciones/liquidaciones.module';
 import { ParametrosNominaModule } from './modules/parametros-nomina/parametros-nomina.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { ParametrosNominaModule } from './modules/parametros-nomina/parametros-n
     AsistenciaModule,
     LiquidacionesModule,
     ParametrosNominaModule,
+    DashboardModule,
   ],
   controllers: [],
   providers: [],

@@ -18,5 +18,6 @@ import { AuthModule } from '../../infraestructure/auth/auth.module';
             useClass: PayrollPeriodTypeOrmRepository,
         },
     ],
+    exports: [PAYROLL_PERIOD_REPOSITORY_PORT],
 })
 export class LiquidacionesModule {}
