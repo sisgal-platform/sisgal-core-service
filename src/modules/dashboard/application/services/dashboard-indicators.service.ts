@@ -25,6 +25,7 @@ import {
   previousPeriod,
   startOfDay,
   startOfNextDay,
+  toCalendarDate,
   weekdayLabel,
 } from '../../domain/period-range';
 
@@ -172,7 +173,7 @@ export class DashboardIndicatorsService {
     }
 
     for (const record of records) {
-      const date = record.check_in.toISOString().slice(0, 10);
+      const date = toCalendarDate(record.check_in);
       const label = weekdayLabel(date);
       checkInsByWeekday.set(label, (checkInsByWeekday.get(label) ?? 0) + 1);
     }

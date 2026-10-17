@@ -9,9 +9,14 @@ const SHORT_MONTH_LABELS = [
   'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic',
 ];
 
+// Construir un Intl.DateTimeFormat es costoso; se cachea uno solo y se
+// reutiliza, en vez de crear uno nuevo en cada llamada (esto último fue la
+// causa de una prueba de rendimiento que tardaba varios segundos).
+const calendarDateFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: TIME_ZONE });
+
 /** Fecha de hoy (YYYY-MM-DD) en la zona horaria de operación. */
 export function today(): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: TIME_ZONE }).format(new Date());
+  return calendarDateFormatter.format(new Date());
 }
 
 /** Instante en que comienza el día indicado (YYYY-MM-DD) en la zona de operación. */
@@ -46,7 +51,7 @@ export function previousPeriod(from: string, to: string): { from: string; to: st
 /** Suma (o resta, con un número negativo) días calendario a una fecha (YYYY-MM-DD). */
 export function addDays(date: string, amount: number): string {
   const shifted = new Date(startOfDay(date).getTime() + amount * MS_PER_DAY);
-  return new Intl.DateTimeFormat('en-CA', { timeZone: TIME_ZONE }).format(shifted);
+  return calendarDateFormatter.format(shifted);
 }
 
 /** Día de la semana (0 = domingo) de una fecha (YYYY-MM-DD), en la zona de operación. */
@@ -57,6 +62,11 @@ export function weekdayIndex(date: string): number {
 /** Etiqueta corta del día de la semana, p. ej. "Lun". */
 export function weekdayLabel(date: string): string {
   return SHORT_WEEKDAY_LABELS[weekdayIndex(date)];
+}
+
+/** Fecha calendario (YYYY-MM-DD) de un instante, en la zona horaria de operación. */
+export function toCalendarDate(instant: Date): string {
+  return calendarDateFormatter.format(instant);
 }
 
 /** Etiqueta corta del mes, p. ej. "Oct". */
