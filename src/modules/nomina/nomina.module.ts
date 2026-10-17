@@ -15,6 +15,7 @@ import { NominaController } from './infrastructure/http/controllers/nomina.contr
 import { LegalDeductionsService } from './application/services/legal-deductions.service';
 import { SYSTEM_CONFIG_REPOSITORY_PORT } from './domain/ports/system-config-repository.port';
 import { SystemConfigTypeOrmRepository } from './infrastructure/persistence/repositories/system-config.typeorm.repository';
+import { TransportAllowanceService } from './application/services/transport-allowance.service';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { SystemConfigTypeOrmRepository } from './infrastructure/persistence/repo
     NominaService,
     PayrollHoursService,
     LegalDeductionsService,
+    TransportAllowanceService,
     {
       provide: SYSTEM_CONFIG_REPOSITORY_PORT,
       useClass: SystemConfigTypeOrmRepository,
@@ -46,6 +48,6 @@ import { SystemConfigTypeOrmRepository } from './infrastructure/persistence/repo
       useClass: AttendanceRecordTypeOrmRepository,
     },
   ],
-  exports: [NominaService, LegalDeductionsService],
+  exports: [NominaService, LegalDeductionsService, TransportAllowanceService],
 })
 export class NominaModule {}
