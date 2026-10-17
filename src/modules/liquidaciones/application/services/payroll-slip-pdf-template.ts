@@ -138,16 +138,16 @@ function drawTotals(doc: PDFKit.PDFDocument, data: PayrollSlipData): void {
   drawDivider(doc);
   doc.moveDown(0.5);
 
-  const totales: [string, number, string][] = [
-    ['Total devengado', data.totalEarnings, SUCCESS_COLOR],
-    ['Total deducciones', data.totalDeductions, ERROR_COLOR],
+  const totales: [string, number][] = [
+    ['Total devengado', data.totalEarnings],
+    ['Total deducciones', data.totalDeductions],
   ];
   doc.fontSize(9).font('Helvetica');
-  for (const [label, amount, color] of totales) {
+  for (const [label, amount] of totales) {
     const y = doc.y;
     doc.fillColor(MUTED_COLOR).text(label, PAGE_MARGIN, y);
     doc
-      .fillColor(color)
+      .fillColor('#000000')
       .text(formatCurrency(amount), PAGE_MARGIN, y, {
         width: doc.page.width - PAGE_MARGIN * 2,
         align: 'right',

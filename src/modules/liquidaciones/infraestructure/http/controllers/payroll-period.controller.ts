@@ -108,6 +108,10 @@ export class PayrollPeriodController {
         @Res({ passthrough: true }) res: Response,
     ): Promise<StreamableFile> {
         const payrollPeriod = await this.payrollPeriodService.findById(id);
+        // El estado de la liquidación debe validarse aquí antes de generar el
+        // PDF: solo liquidaciones confirmadas pueden exportarse. No se valida
+        // todavía porque el modelo no tiene una columna de estado real (toda
+        // liquidación almacenada se asume confirmada).
         const slipData = toPayrollSlipData(payrollPeriod);
         const pdf = await this.payrollSlipPdfService.generate(slipData);
 

@@ -12,7 +12,10 @@ function toIsoDate(value: Date | string): string {
 
 // Busca la sucursal vigente del empleado en la fecha del período liquidado
 // (no la sucursal actual): respeta la regla de no recalcular con datos
-// distintos a los usados al momento de la liquidación.
+// distintos a los usados al momento de la liquidación. Se usa la fecha de
+// inicio del período (no la de cierre/liquidación) porque es la fecha de
+// nómina a la que realmente corresponde la sucursal: el empleado puede
+// liquidarse o reasignarse de sucursal después de terminado el período.
 export function findBranchAssignmentAt(
   assignments: EmployeeBranchAssignment[],
   date: Date | string,
@@ -31,14 +34,14 @@ export function toPayrollSlipData(payrollPeriod: PayrollPeriod): PayrollSlipData
   const { employee } = payrollPeriod;
   const assignment = findBranchAssignmentAt(
     employee.employee_branch_assig ?? [],
-    payrollPeriod.period_end,
+    payrollPeriod.period_start,
   );
   // Sin la sucursal vigente a la fecha liquidada no se puede armar un
   // comprobante confiable (faltaría la dirección exigida por la normativa);
   // es mejor informar el error que generar un PDF con esos datos en blanco.
   if (!assignment) {
     throw new UnprocessableEntityException(
-      `No fue posible determinar la sucursal del empleado para la fecha de liquidación de la liquidación ${payrollPeriod.id}.`,
+      `No fue posible determinar la sucursal del empleado para el período de la liquidación ${payrollPeriod.id}.`,
     );
   }
   const branch = assignment.branch;

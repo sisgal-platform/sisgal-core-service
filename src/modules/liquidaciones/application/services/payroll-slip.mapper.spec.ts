@@ -63,9 +63,13 @@ describe('payroll-slip.mapper', () => {
       expect(data.deductions).toEqual([{ conceptName: 'Préstamo', amount: 150000 }]);
     });
 
-    it('usa la sucursal vigente al período liquidado, no la vigente actualmente', () => {
+    it('usa la sucursal vigente al inicio del período liquidado, no la de cierre ni la actual', () => {
+      // period_start cae en la asignación de Envigado, pero period_end ya cae en la de
+      // Santana: si se usara la fecha de cierre, el resultado cambiaría (y sería
+      // incorrecto, porque el empleado pudo reasignarse después de liquidado).
       const liquidacion = crearLiquidacion({
-        period_end: '2026-03-31' as unknown as Date,
+        period_start: '2026-03-31' as unknown as Date,
+        period_end: '2026-07-15' as unknown as Date,
         employee: Object.assign(new Employee(), {
           firstName: 'Juan',
           lastName: 'Pérez',
