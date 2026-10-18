@@ -7,19 +7,28 @@ import { PAYROLL_PERIOD_REPOSITORY_PORT } from './domain/ports/payroll-period-re
 import { PayrollPeriodTypeOrmRepository } from './infraestructure/persistence/repositories/payroll-period.typeorm.repository';
 import { PayrollSlipPdfService } from './application/services/payroll-slip-pdf.service';
 import { AuthModule } from '../../infraestructure/auth/auth.module';
+import { EmployeeModule } from '../empleados/employee.module';
+import { NominaModule } from '../nomina/nomina.module';
+import { PreLiquidationService } from './application/services/pre-liquidation.service';
 
 @Module({
-    // AuthModule aporta los guards de JWT y rol
-    imports: [AuthModule, TypeOrmModule.forFeature([PayrollPeriod])],
-    controllers: [PayrollPeriodController],
-    providers: [
-        PayrollPeriodService,
-        PayrollSlipPdfService,
-        {
-            provide: PAYROLL_PERIOD_REPOSITORY_PORT,
-            useClass: PayrollPeriodTypeOrmRepository,
-        },
-    ],
-    exports: [PAYROLL_PERIOD_REPOSITORY_PORT],
+  // AuthModule aporta los guards de JWT y rol
+  imports: [
+    AuthModule,
+    EmployeeModule,
+    NominaModule,
+    TypeOrmModule.forFeature([PayrollPeriod]),
+  ],
+  controllers: [PayrollPeriodController],
+  providers: [
+    PayrollPeriodService,
+    PreLiquidationService,
+    PayrollSlipPdfService,
+    {
+      provide: PAYROLL_PERIOD_REPOSITORY_PORT,
+      useClass: PayrollPeriodTypeOrmRepository,
+    },
+  ],
+  exports: [PAYROLL_PERIOD_REPOSITORY_PORT],
 })
 export class LiquidacionesModule {}

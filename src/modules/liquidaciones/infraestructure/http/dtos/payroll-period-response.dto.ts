@@ -5,8 +5,9 @@ export class PayrollPeriodResponseDto {
   @ApiProperty({
     description: 'Identificador único de la liquidación',
     example: 1,
+    nullable: true,
   })
-  id!: number;
+  id!: number | null;
 
   @ApiProperty({
     description: 'Identificador del empleado asociado',
@@ -35,8 +36,9 @@ export class PayrollPeriodResponseDto {
   @ApiProperty({
     description: 'Fecha de liquidación (fecha de cierre del período)',
     example: '2026-09-30',
+    nullable: true,
   })
-  settlementDate!: Date;
+  settlementDate!: Date | null;
 
   @ApiProperty({
     description: 'Total devengado en el período',
@@ -57,10 +59,11 @@ export class PayrollPeriodResponseDto {
   netPay!: number;
 
   @ApiProperty({
-    description: 'Estado de la liquidación. Todas las liquidaciones registradas están confirmadas.',
+    description:
+      'Estado de la liquidación. Todas las liquidaciones registradas están confirmadas.',
     example: 'Confirmada',
   })
-  status!: 'Confirmada';
+  status!: 'Confirmada' | 'Preliquidación';
 
   static fromEntity(payrollPeriod: PayrollPeriod): PayrollPeriodResponseDto {
     const dto = new PayrollPeriodResponseDto();
