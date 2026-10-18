@@ -2,6 +2,9 @@ import { ApiProperty } from '@nestjs/swagger';
 import { PayrollPeriod } from '../../../../../entities/payroll-period.model';
 import { PayrollPeriodResponseDto } from './payroll-period-response.dto';
 import { PayrollLineResponseDto } from './payroll-line-response.dto';
+import type { Employee } from '../../../../../entities/employee.model';
+import type { PreLiquidationRequestDto } from 'src/modules/nomina/infrastructure/http/dtos/pre-liquidation-request.dto';
+import type { PreLiquidationCalculation } from 'src/modules/nomina/application/services/nomina.service';
 
 export class PayrollPeriodDetailResponseDto extends PayrollPeriodResponseDto {
   @ApiProperty({
@@ -24,20 +27,24 @@ export class PayrollPeriodDetailResponseDto extends PayrollPeriodResponseDto {
   employeePosition!: string | null;
 
   @ApiProperty({
-    description: 'Conceptos devengados (salario base, horas extra, recargos, auxilio de transporte, primas, etc.)',
+    description:
+      'Conceptos devengados (salario base, horas extra, recargos, auxilio de transporte, primas, etc.)',
     type: PayrollLineResponseDto,
     isArray: true,
   })
   earnings!: PayrollLineResponseDto[];
 
   @ApiProperty({
-    description: 'Conceptos deducidos (deducciones legales, préstamos, adelantos, etc.)',
+    description:
+      'Conceptos deducidos (deducciones legales, préstamos, adelantos, etc.)',
     type: PayrollLineResponseDto,
     isArray: true,
   })
   deductions!: PayrollLineResponseDto[];
 
-  static fromEntity(payrollPeriod: PayrollPeriod): PayrollPeriodDetailResponseDto {
+  static fromEntity(
+    payrollPeriod: PayrollPeriod,
+  ): PayrollPeriodDetailResponseDto {
     const base = PayrollPeriodResponseDto.fromEntity(payrollPeriod);
     const dto = Object.assign(new PayrollPeriodDetailResponseDto(), base);
 
@@ -53,6 +60,30 @@ export class PayrollPeriodDetailResponseDto extends PayrollPeriodResponseDto {
       .filter((line) => line.type === 'DEDUCCION')
       .map((line) => PayrollLineResponseDto.fromEntity(line));
 
+    return dto;
+  }
+
+  static fromPreLiquidation(
+    employee: Employee,
+    period: PreLiquidationRequestDto,
+    calculation: PreLiquidationCalculation,
+  ): PayrollPeriodDetailResponseDto {
+    const dto = new PayrollPeriodDetailResponseDto();
+    dto.id = null;
+    dto.employeeId = employee.id;
+    dto.employeeName = `${employee.firstName} ${employee.lastName}`;
+    dto.periodStart = new Date(`${period.periodStart}T00:00:00.000Z`);
+    dto.periodEnd = new Date(`${period.periodEnd}T00:00:00.000Z`);
+    dto.settlementDate = null;
+    dto.totalEarnings = calculation.totalEarnings;
+    dto.totalDeductions = calculation.totalDeductions;
+    dto.netPay = calculation.netPay;
+    dto.status = 'Preliquidación';
+    dto.employeeDocumentType = employee.document_type;
+    dto.employeeDocument = employee.document;
+    dto.employeePosition = employee.jobPosition?.name ?? null;
+    dto.earnings = calculation.earnings;
+    dto.deductions = calculation.deductions;
     return dto;
   }
 }
