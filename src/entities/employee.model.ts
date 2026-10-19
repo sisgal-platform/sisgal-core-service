@@ -39,6 +39,13 @@ export class Employee {
   salary_base!: number;
 
   /**
+   * Fecha de ingreso (YYYY-MM-DD). Define el tiempo trabajado para la prima de
+   * servicios; los empleados registrados antes de la HU16 no la tienen.
+   */
+  @Column('date', { nullable: true })
+  hire_date!: string | null;
+
+  /**
    * Nombre del cargo al momento del registro. Se conserva como texto para no
    * alterar la información histórica cuando el cargo del catálogo cambia.
    */

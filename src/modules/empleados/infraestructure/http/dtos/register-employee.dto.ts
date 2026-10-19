@@ -1,12 +1,15 @@
 import {
+  IsDateString,
   IsEnum,
   IsInt,
   IsNotEmpty,
   IsNumber,
+  IsOptional,
   IsString,
+  Matches,
   Min,
 } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { DocumentType } from '../../../../../modules/empleados/domain/value-objects/document-type.enum';
 
 export class RegisterEmployeeDto {
@@ -76,4 +79,21 @@ export class RegisterEmployeeDto {
   @IsInt()
   @Min(1)
   branchId!: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Fecha de ingreso (YYYY-MM-DD), no posterior a hoy. Es necesaria para calcular la prima de servicios.',
+    example: '2026-02-15',
+    type: String,
+    format: 'date',
+  })
+  @IsOptional()
+  @IsDateString(
+    { strict: true },
+    { message: 'La fecha de ingreso debe ser válida.' },
+  )
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'La fecha de ingreso debe tener formato YYYY-MM-DD.',
+  })
+  hireDate?: string;
 }
