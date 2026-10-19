@@ -48,6 +48,7 @@ describe('NominaService', () => {
     document: '1020304050',
     document_type: 'CC',
     salary_base: '1500000.00',
+    hire_date: '2025-08-01',
     status: 'ACTIVO',
   } as unknown as Employee;
   const luis = {
@@ -116,6 +117,7 @@ describe('NominaService', () => {
     TRANSPORT_ALLOWANCE: 249_095,
     HEALTH_RATE: 4,
     PENSION_RATE: 4,
+    SERVICE_BONUS_DAYS_PER_YEAR: 30,
   };
   const liquidationDate = new Date(2026, 8, 30, 12);
 
@@ -653,6 +655,156 @@ describe('NominaService', () => {
       const second = await service.calculatePayroll('2026-09-01', '2026-09-30');
 
       expect(second).toEqual(first);
+    });
+  });
+
+  describe('prima de servicios', () => {
+    const june = { periodStart: '2026-06-01', periodEnd: '2026-06-30' };
+
+    beforeEach(() => {
+      payrollInputsRepository.findAttendanceRecords.mockResolvedValue([]);
+      payrollInputsRepository.findDisabilityLeaves.mockResolvedValue([]);
+    });
+
+    it('incluye la prima en la liquidación que cierra el semestre, sin cambiar salud ni pensión', async () => {
+      const result = await service.calculatePreLiquidation(
+        ana,
+        june.periodStart,
+        june.periodEnd,
+      );
+
+      // (1.500.000 + 249.095 de auxilio) x 180 / 360.
+      expect(result.earnings).toEqual([
+        { conceptName: 'Salario base', amount: 1_500_000 },
+        { conceptName: 'Auxilio de transporte', amount: 249_095 },
+        {
+          conceptName: 'Prima de servicios 1.er semestre 2026',
+          amount: 874_547.5,
+          serviceBonus: {
+            semesterStart: '2026-01-01',
+            semesterEnd: '2026-06-30',
+            workedDays: 180,
+            semesterDays: 180,
+            baseAmount: 1_749_095,
+            isProportional: false,
+          },
+        },
+      ]);
+      expect(result.deductions).toEqual([
+        { conceptName: 'Salud', amount: 60_000 },
+        { conceptName: 'Pensión', amount: 60_000 },
+      ]);
+      expect(result.totalEarnings).toBe(2_623_642.5);
+      expect(result.netPay).toBe(2_503_642.5);
+      expect(systemConfigRepository.getValue).toHaveBeenCalledWith(
+        'SERVICE_BONUS_DAYS_PER_YEAR',
+        new Date(2026, 5, 30, 12),
+      );
+      expect(result.configSnapshot).toMatchObject({
+        hireDate: '2025-08-01',
+        serviceBonusDaysPerYear: 30,
+        serviceBonuses: [
+          expect.objectContaining({
+            conceptName: 'Prima de servicios 1.er semestre 2026',
+            workedFrom: '2026-01-01',
+            salaryBase: 1_500_000,
+            transportAllowance: 249_095,
+            amount: 874_547.5,
+          }),
+        ],
+      });
+    });
+
+    it('calcula la prima proporcional desde la fecha de ingreso', async () => {
+      const result = await service.calculatePreLiquidation(
+        { ...ana, hire_date: '2026-03-01' } as Employee,
+        june.periodStart,
+        june.periodEnd,
+      );
+
+      expect(result.earnings[2]).toEqual({
+        conceptName: 'Prima de servicios 1.er semestre 2026',
+        amount: 583_031.67,
+        serviceBonus: expect.objectContaining({
+          workedDays: 120,
+          isProportional: true,
+        }),
+      });
+    });
+
+    it('no incluye prima a quien ingresó después de terminar el semestre', async () => {
+      // El período incluye el 31 de diciembre, pero el ingreso fue en enero.
+      const result = await service.calculatePreLiquidation(
+        { ...ana, hire_date: '2027-01-05' } as Employee,
+        '2026-12-16',
+        '2027-01-15',
+      );
+
+      expect(
+        result.earnings.some((line) =>
+          line.conceptName.startsWith('Prima de servicios'),
+        ),
+      ).toBe(false);
+      expect(result.configSnapshot.serviceBonuses).toEqual([]);
+    });
+
+    it('no consulta los días de prima en un período que no paga prima', async () => {
+      await service.calculatePreLiquidation(ana, '2026-07-01', '2026-07-31');
+
+      expect(systemConfigRepository.getValue).not.toHaveBeenCalledWith(
+        'SERVICE_BONUS_DAYS_PER_YEAR',
+        expect.anything(),
+      );
+    });
+
+    it('pide registrar la fecha de ingreso cuando el período paga prima', async () => {
+      await expect(
+        service.calculatePreLiquidation(
+          { ...ana, hire_date: null } as Employee,
+          june.periodStart,
+          june.periodEnd,
+        ),
+      ).rejects.toThrow(
+        'No es posible calcular la nómina de Ana Gómez: No tiene fecha de ingreso registrada; es necesaria para calcular la prima de servicios.',
+      );
+    });
+
+    it('identifica en el lote a los empleados sin fecha de ingreso sin descartar a los demás', async () => {
+      const result = await service.calculatePayroll(
+        june.periodStart,
+        june.periodEnd,
+      );
+
+      expect(result.status).toBe('CON_ERRORES');
+      expect(result.results.map((item) => item.employee.id)).toEqual([1]);
+      expect(result.errors).toEqual([
+        {
+          employee: luis,
+          causes: [
+            'No tiene fecha de ingreso registrada; es necesaria para calcular la prima de servicios.',
+          ],
+        },
+      ]);
+    });
+
+    it('no exige la fecha de ingreso en un período que no paga prima', async () => {
+      const result = await service.calculatePayroll('2026-09-01', '2026-09-30');
+
+      expect(result.errors).toEqual([]);
+    });
+
+    it('rechaza el cálculo cuando no hay días de prima configurados', async () => {
+      systemConfigRepository.getValue.mockImplementation(async (key) =>
+        key === 'SERVICE_BONUS_DAYS_PER_YEAR' ? null : systemConfig[key],
+      );
+
+      await expect(
+        service.calculatePreLiquidation(ana, june.periodStart, june.periodEnd),
+      ).rejects.toThrow(
+        new UnprocessableEntityException(
+          'No existe un valor vigente y válido para los días de prima de servicios por año al 30/06/2026.',
+        ),
+      );
     });
   });
 });
