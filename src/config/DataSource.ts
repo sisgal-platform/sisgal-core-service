@@ -25,7 +25,8 @@ import { AddPayrollPeriodIndexes1791200000000 } from '../migrations/179120000000
 import { VersionWorkdayConfigValidity1791720000000 } from '../migrations/1791720000000-VersionWorkdayConfigValidity';
 import { VersionWorkRateConfigValidity1791730000000 } from '../migrations/1791730000000-VersionWorkRateConfigValidity';
 import { VersionSystemConfigValidity1791740000000 } from '../migrations/1791740000000-VersionSystemConfigValidity';
-import { EmployeeLoan, Holiday } from 'src/entities';
+import { AddLoanInstallments1791810000000 } from '../migrations/1791810000000-AddLoanInstallments';
+import { EmployeeLoan, Holiday, LoanInstallment } from 'src/entities';
 
 export const dataSourceOptions: DataSourceOptions = {
   type: 'postgres',
@@ -49,7 +50,8 @@ export const dataSourceOptions: DataSourceOptions = {
     WorkdayConfig,
     Position,
     EmployeeLoan,
-    Holiday
+    Holiday,
+    LoanInstallment,
   ],
   ssl: { rejectUnauthorized: false },
   migrations: [
@@ -62,6 +64,7 @@ export const dataSourceOptions: DataSourceOptions = {
     VersionWorkdayConfigValidity1791720000000,
     VersionWorkRateConfigValidity1791730000000,
     VersionSystemConfigValidity1791740000000,
+    AddLoanInstallments1791810000000,
   ],
 };
 

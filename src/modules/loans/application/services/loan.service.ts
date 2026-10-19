@@ -14,7 +14,9 @@ import type {
 import { LoanIndicatorsResponseDto } from '../../infrastructure/http/dtos/loan-indicators-response.dto';
 import { CreateLoanDto } from '../../infrastructure/http/dtos/create-loan.dto';
 import { LoanResponseDto } from '../../infrastructure/http/dtos/loan-response.dto';
+import { LoanPeriodicity } from '../../enums/loan-periodicity.enum';
 import { LoanStatus } from '../../enums/loan-status.enum';
+import { calculateInstallmentAmount } from '../../domain/loan-installment-amount';
 
 @Injectable()
 export class LoanService {
@@ -31,17 +33,26 @@ export class LoanService {
       );
     }
 
+    const installmentAmount = calculateInstallmentAmount(
+      dto.totalAmount,
+      dto.totalInstallments,
+    );
+    if (installmentAmount < 1) {
+      throw new BadRequestException(
+        'El valor de cada cuota debe ser de al menos un peso.',
+      );
+    }
+
     const loan = new EmployeeLoan();
     loan.employee = employee;
     loan.employeeId = employee.id;
     loan.totalAmount = dto.totalAmount;
-    loan.installmentAmount = Number(
-      (dto.totalAmount / dto.totalInstallments).toFixed(2),
-    );
+    loan.installmentAmount = installmentAmount;
     loan.totalInstallments = dto.totalInstallments;
     loan.pendingInstallments = dto.totalInstallments;
     loan.outstandingBalance = dto.totalAmount;
     loan.grantedAt = new Date(`${dto.grantedAt}T00:00:00.000Z`);
+    loan.periodicity = dto.periodicity ?? LoanPeriodicity.MENSUAL;
     loan.status = LoanStatus.ACTIVO;
 
     const savedLoan = await this.loanRepository.save(loan);

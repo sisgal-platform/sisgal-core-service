@@ -7,6 +7,18 @@ import type { Employee } from '../../../../../entities/employee.model';
 import type { PreLiquidationRequestDto } from 'src/modules/nomina/infrastructure/http/dtos/pre-liquidation-request.dto';
 import type { PreLiquidationCalculation } from 'src/modules/nomina/application/services/nomina.service';
 
+// Las observaciones de la liquidación quedan en su snapshot al guardarla.
+function savedObservations(
+  configSnapshot: Record<string, unknown> | null | undefined,
+): string[] {
+  const observations = configSnapshot?.loanObservations;
+  return Array.isArray(observations)
+    ? observations.filter(
+        (observation): observation is string => typeof observation === 'string',
+      )
+    : [];
+}
+
 export class PayrollPeriodDetailResponseDto extends PayrollPeriodResponseDto {
   @ApiProperty({
     description: 'Tipo de documento de identidad del empleado',
@@ -51,6 +63,17 @@ export class PayrollPeriodDetailResponseDto extends PayrollPeriodResponseDto {
   })
   workedHours!: WorkedHoursResponseDto[];
 
+  @ApiProperty({
+    description:
+      'Cuotas de préstamos que no se descontaron o se descontaron en parte, y por qué',
+    example: [
+      'La cuota del préstamo #4 se descontó parcialmente ($ 150.000 de $ 250.000) por el límite de deducciones del período (50% del salario neto).',
+    ],
+    isArray: true,
+    type: String,
+  })
+  observations!: string[];
+
   static fromEntity(
     payrollPeriod: PayrollPeriod,
   ): PayrollPeriodDetailResponseDto {
@@ -62,13 +85,25 @@ export class PayrollPeriodDetailResponseDto extends PayrollPeriodResponseDto {
     dto.employeePosition = payrollPeriod.employee.jobPosition?.name ?? null;
 
     const lines = payrollPeriod.payroll_lines ?? [];
+    const loanInstallmentsByLine = new Map(
+      (payrollPeriod.loan_installments ?? []).map((installment) => [
+        installment.payrollLineId,
+        installment,
+      ]),
+    );
     dto.earnings = lines
       .filter((line) => line.type === 'DEVENGADO')
       .map((line) => PayrollLineResponseDto.fromEntity(line));
     dto.deductions = lines
       .filter((line) => line.type === 'DEDUCCION')
-      .map((line) => PayrollLineResponseDto.fromEntity(line));
+      .map((line) =>
+        PayrollLineResponseDto.fromEntity(
+          line,
+          loanInstallmentsByLine.get(line.id),
+        ),
+      );
     dto.workedHours = [];
+    dto.observations = savedObservations(payrollPeriod.config_snapshot);
 
     return dto;
   }
@@ -95,6 +130,9 @@ export class PayrollPeriodDetailResponseDto extends PayrollPeriodResponseDto {
     dto.earnings = calculation.earnings;
     dto.deductions = calculation.deductions;
     dto.workedHours = calculation.workedHours;
+    dto.observations = calculation.loanObservations.map(
+      (observation) => observation.message,
+    );
     return dto;
   }
 }

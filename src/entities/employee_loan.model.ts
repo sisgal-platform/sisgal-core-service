@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 
 import { Employee } from './employee.model';
+import { LoanPeriodicity } from 'src/modules/loans/enums/loan-periodicity.enum';
 import { LoanStatus } from 'src/modules/loans/enums/loan-status.enum';
 
 @Entity('employee_loans')
@@ -69,6 +70,14 @@ export class EmployeeLoan {
     type: 'date',
   })
   grantedAt!: Date;
+
+  /** Cada cuánto se descuenta una cuota en la liquidación. */
+  @Column({
+    type: 'varchar',
+    length: 20,
+    default: LoanPeriodicity.MENSUAL,
+  })
+  periodicity!: LoanPeriodicity;
 
   @Column({
     type: 'enum',

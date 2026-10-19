@@ -29,10 +29,16 @@ import {
   type WorkedHoursSummary,
   type WorkedSegment,
   calculateEarnings,
-  calculateLoanDeductions,
   calculateTotals,
   roundCurrency,
 } from '../../domain/payroll-calculation';
+import {
+  MAX_LOAN_DEDUCTION_RATE,
+  type LoanInput,
+  type LoanInstallmentPlan,
+  type LoanObservation,
+  planLoanInstallments,
+} from '../../domain/loan-installments';
 import { formatCalendarDate } from '../../domain/payroll-days';
 import {
   PAYROLL_HOURS_REPOSITORY_PORT,
@@ -62,6 +68,10 @@ export interface PreLiquidationCalculation {
   deductions: PayrollLineResponseDto[];
   /** Horas trabajadas en el período por tipo de hora, incluidas las ordinarias. */
   workedHours: WorkedHoursSummary[];
+  /** Cuotas de préstamos descontadas y su efecto sobre cada préstamo. */
+  loanInstallments: LoanInstallmentPlan[];
+  /** Cuotas que no se descontaron, o se descontaron en parte, y por qué. */
+  loanObservations: LoanObservation[];
   /** Parámetros usados en el cálculo, para conservarlos junto a la liquidación. */
   configSnapshot: Record<string, unknown>;
 }
@@ -116,6 +126,21 @@ function isEmployeeError(
 
 function fullName(employee: Employee): string {
   return `${employee.firstName} ${employee.lastName}`;
+}
+
+// TypeORM entrega las columnas numeric y bigint como texto.
+function toLoanInput(loan: EmployeeLoan): LoanInput {
+  return {
+    loanId: loan.id,
+    employeeId: loan.employeeId == null ? null : Number(loan.employeeId),
+    totalAmount: Number(loan.totalAmount),
+    installmentAmount: Number(loan.installmentAmount),
+    totalInstallments: Number(loan.totalInstallments),
+    pendingInstallments: Number(loan.pendingInstallments),
+    outstandingBalance: Number(loan.outstandingBalance),
+    grantedAt: aFechaCalendario(loan.grantedAt),
+    periodicity: loan.periodicity,
+  };
 }
 
 @Injectable()
@@ -328,7 +353,19 @@ export class NominaService {
         earnings.contributionBase,
         context.liquidationDate,
       );
-      const deductions = [
+      const maxLoanDeductions = roundCurrency(
+        MAX_LOAN_DEDUCTION_RATE *
+          (earnings.contributionBase -
+            legalDeductions.healthDeduction -
+            legalDeductions.pensionDeduction),
+      );
+      const loanPlan = planLoanInstallments({
+        loans: inputs.loans.map(toLoanInput),
+        periodStart: period.periodStart,
+        periodEnd: period.periodEnd,
+        maxAmount: maxLoanDeductions,
+      });
+      const deductions: PayrollLineResponseDto[] = [
         {
           conceptName: PAYROLL_CONCEPT.HEALTH,
           amount: legalDeductions.healthDeduction,
@@ -337,14 +374,17 @@ export class NominaService {
           conceptName: PAYROLL_CONCEPT.PENSION,
           amount: legalDeductions.pensionDeduction,
         },
-        ...calculateLoanDeductions(
-          inputs.loans.map((loan) => ({
-            loanId: loan.id,
-            installmentAmount: Number(loan.installmentAmount),
-            outstandingBalance: Number(loan.outstandingBalance),
-            pendingInstallments: Number(loan.pendingInstallments),
-          })),
-        ),
+        ...loanPlan.installments.map((installment) => ({
+          conceptName: installment.conceptName,
+          amount: installment.amount,
+          loan: {
+            loanId: installment.loanId,
+            installments: installment.installments,
+            scheduledAmount: installment.scheduledAmount,
+            outstandingBalance: installment.newBalance,
+            pendingInstallments: installment.remainingInstallments,
+          },
+        })),
       ];
       const totals = calculateTotals(earnings.earnings, deductions);
 
@@ -355,6 +395,8 @@ export class NominaService {
           earnings: earnings.earnings,
           deductions,
           workedHours: earnings.workedHours,
+          loanInstallments: loanPlan.installments,
+          loanObservations: loanPlan.observations,
           configSnapshot: {
             liquidationDate: period.periodEnd,
             salaryBase: salary,
@@ -369,6 +411,10 @@ export class NominaService {
             contributionBase: earnings.contributionBase,
             healthRate: legalDeductions.healthRate,
             pensionRate: legalDeductions.pensionRate,
+            maxLoanDeductions,
+            loanObservations: loanPlan.observations.map(
+              (observation) => observation.message,
+            ),
             workedHours: earnings.workedHours,
           },
         },

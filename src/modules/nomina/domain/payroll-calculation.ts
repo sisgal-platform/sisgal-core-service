@@ -9,7 +9,6 @@ import {
   WORK_HOUR_CONCEPT,
   WORK_HOUR_LABEL,
   WORK_HOUR_ORDER,
-  loanInstallmentConcept,
 } from './payroll-concepts';
 import {
   PAYROLL_DAYS_PER_MONTH,
@@ -68,13 +67,6 @@ export interface PayrollEarnings {
   totalEarnings: number;
 }
 
-export interface LoanInstallmentInput {
-  loanId: number;
-  installmentAmount: number;
-  outstandingBalance: number;
-  pendingInstallments: number;
-}
-
 export interface PayrollTotals {
   totalEarnings: number;
   totalDeductions: number;
@@ -88,6 +80,11 @@ const currencyFormatter = new Intl.NumberFormat('es-CO', {
   currency: 'COP',
   maximumFractionDigits: 2,
 });
+
+/** Valor en pesos para los mensajes que ve el administrador. */
+export function formatCurrency(value: number): string {
+  return currencyFormatter.format(value);
+}
 
 export function roundCurrency(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
@@ -286,26 +283,6 @@ function calculateWorkedHoursEarnings(
   return { concepts, summary };
 }
 
-/**
- * Una cuota por cada préstamo con cuotas y saldo pendientes; la última cuota
- * nunca descuenta más que el saldo que queda.
- */
-export function calculateLoanDeductions(
-  loans: LoanInstallmentInput[],
-): PayrollConcept[] {
-  return loans
-    .filter(
-      (loan) => loan.pendingInstallments > 0 && loan.outstandingBalance > 0,
-    )
-    .sort((a, b) => a.loanId - b.loanId)
-    .map((loan) => ({
-      conceptName: loanInstallmentConcept(loan.loanId),
-      amount: roundCurrency(
-        Math.min(loan.installmentAmount, loan.outstandingBalance),
-      ),
-    }));
-}
-
 /** Neto a pagar = total devengado - total deducciones. */
 export function calculateTotals(
   earnings: PayrollConcept[],
@@ -317,7 +294,7 @@ export function calculateTotals(
 
   if (netPay < 0) {
     throw new PayrollInconsistencyError([
-      `Las deducciones (${currencyFormatter.format(totalDeductions)}) superan el total devengado (${currencyFormatter.format(totalEarnings)}).`,
+      `Las deducciones (${formatCurrency(totalDeductions)}) superan el total devengado (${formatCurrency(totalEarnings)}).`,
     ]);
   }
 

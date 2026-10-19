@@ -94,6 +94,23 @@ describe('NominaService', () => {
     EXTRA_DOMINICAL_NOCTURNA: 2.5,
   };
 
+  // Préstamo mensual de 1.500.000 en 6 cuotas de 250.000, con 4 pendientes.
+  function loanOfAna(overrides: Partial<Record<string, unknown>> = {}) {
+    return {
+      id: 4,
+      employeeId: '1',
+      totalAmount: '1500000.00',
+      installmentAmount: 250_000,
+      totalInstallments: 6,
+      pendingInstallments: 4,
+      outstandingBalance: '1000000.00',
+      grantedAt: '2026-07-20',
+      periodicity: 'MENSUAL',
+      status: 'ACTIVO',
+      ...overrides,
+    } as unknown as EmployeeLoan;
+  }
+
   const systemConfig: Record<string, number> = {
     MINIMUM_WAGE: 1_750_905,
     TRANSPORT_ALLOWANCE: 249_095,
@@ -127,15 +144,7 @@ describe('NominaService', () => {
         end_date: '2026-09-10',
       } as unknown as DisabilityLeave,
     ]);
-    payrollInputsRepository.findActiveLoans.mockResolvedValue([
-      {
-        id: 4,
-        employeeId: '1',
-        installmentAmount: 250_000,
-        outstandingBalance: '1000000.00',
-        pendingInstallments: 4,
-      } as unknown as EmployeeLoan,
-    ]);
+    payrollInputsRepository.findActiveLoans.mockResolvedValue([loanOfAna()]);
     payrollInputsRepository.findPayrollPeriods.mockResolvedValue([]);
     systemConfigRepository.getValue.mockImplementation(
       async (key) => systemConfig[key] ?? null,
@@ -160,8 +169,33 @@ describe('NominaService', () => {
       expect(result.deductions).toEqual([
         { conceptName: 'Salud', amount: 60_625 },
         { conceptName: 'Pensión', amount: 60_625 },
-        { conceptName: 'Cuota préstamo #4', amount: 250_000 },
+        {
+          conceptName: 'Cuota préstamo #4',
+          amount: 250_000,
+          loan: {
+            loanId: 4,
+            installments: 1,
+            scheduledAmount: 250_000,
+            outstandingBalance: 750_000,
+            pendingInstallments: 3,
+          },
+        },
       ]);
+      expect(result.loanInstallments).toEqual([
+        {
+          loanId: 4,
+          conceptName: 'Cuota préstamo #4',
+          cutoffDates: ['2026-09-30'],
+          installments: 1,
+          scheduledAmount: 250_000,
+          amount: 250_000,
+          previousBalance: 1_000_000,
+          newBalance: 750_000,
+          previousPendingInstallments: 4,
+          remainingInstallments: 3,
+        },
+      ]);
+      expect(result.loanObservations).toEqual([]);
       expect(result.totalEarnings).toBe(1_748_113.67);
       expect(result.totalDeductions).toBe(371_250);
       expect(result.netPay).toBe(1_376_863.67);
@@ -182,6 +216,8 @@ describe('NominaService', () => {
         contributionBase: 1_515_625,
         healthRate: 4,
         pensionRate: 4,
+        maxLoanDeductions: 697_187.5,
+        loanObservations: [],
       });
     });
 
@@ -334,20 +370,107 @@ describe('NominaService', () => {
       expect(systemConfigRepository.getValue).not.toHaveBeenCalled();
     });
 
-    it('identifica deducciones que superan el devengado', async () => {
+    it('limita las cuotas al 50% del salario neto y lo informa', async () => {
       payrollInputsRepository.findActiveLoans.mockResolvedValue([
-        {
+        loanOfAna({
           id: 9,
-          employeeId: '1',
+          totalAmount: '5000000.00',
           installmentAmount: 5_000_000,
-          outstandingBalance: 5_000_000,
+          totalInstallments: 1,
           pendingInstallments: 1,
-        } as unknown as EmployeeLoan,
+          outstandingBalance: '5000000.00',
+        }),
       ]);
 
-      await expect(
-        service.calculatePreLiquidation(ana, '2026-09-01', '2026-09-30'),
-      ).rejects.toThrow(UnprocessableEntityException);
+      const result = await service.calculatePreLiquidation(
+        ana,
+        '2026-09-01',
+        '2026-09-30',
+      );
+
+      // 50% de 1.515.625 - 60.625 - 60.625.
+      expect(result.deductions[2]).toEqual({
+        conceptName: 'Cuota préstamo #9',
+        amount: 697_187.5,
+        loan: {
+          loanId: 9,
+          installments: 1,
+          scheduledAmount: 5_000_000,
+          outstandingBalance: 4_302_812.5,
+          pendingInstallments: 1,
+        },
+      });
+      expect(result.netPay).toBe(929_676.17);
+      expect(result.loanObservations).toEqual([
+        expect.objectContaining({
+          loanId: 9,
+          reason: 'LIMITE_DEDUCCIONES',
+          message: expect.stringContaining(
+            'La cuota del préstamo #9 se descontó parcialmente',
+          ),
+        }),
+      ]);
+      expect(result.configSnapshot.loanObservations).toEqual([
+        result.loanObservations[0].message,
+      ]);
+    });
+
+    it('no descuenta la cuota cuando el período no incluye una fecha de corte del préstamo', async () => {
+      const result = await service.calculatePreLiquidation(
+        ana,
+        '2026-09-01',
+        '2026-09-15',
+      );
+
+      expect(result.deductions.map((line) => line.conceptName)).toEqual([
+        'Salud',
+        'Pensión',
+      ]);
+      expect(result.loanInstallments).toEqual([]);
+    });
+
+    it('descuenta una cuota por cada corte de un préstamo quincenal', async () => {
+      payrollInputsRepository.findActiveLoans.mockResolvedValue([
+        loanOfAna({ periodicity: 'QUINCENAL', installmentAmount: 125_000 }),
+      ]);
+
+      const result = await service.calculatePreLiquidation(
+        ana,
+        '2026-09-01',
+        '2026-09-30',
+      );
+
+      expect(result.loanInstallments).toEqual([
+        expect.objectContaining({
+          cutoffDates: ['2026-09-15', '2026-09-30'],
+          installments: 2,
+          amount: 250_000,
+          remainingInstallments: 2,
+        }),
+      ]);
+    });
+
+    it('no descuenta un préstamo con información inconsistente y lo informa', async () => {
+      payrollInputsRepository.findActiveLoans.mockResolvedValue([
+        loanOfAna({ outstandingBalance: '-1000.00' }),
+      ]);
+
+      const result = await service.calculatePreLiquidation(
+        ana,
+        '2026-09-01',
+        '2026-09-30',
+      );
+
+      expect(result.loanInstallments).toEqual([]);
+      expect(result.loanObservations).toEqual([
+        {
+          loanId: 4,
+          reason: 'INFORMACION_INCONSISTENTE',
+          message:
+            'El préstamo #4 no se descontó porque tiene información inconsistente. Revíselo en el módulo de préstamos.',
+          details: { causes: ['El saldo pendiente es negativo.'] },
+        },
+      ]);
     });
 
     it('rechaza el cálculo cuando no existe una jornada laboral vigente', async () => {

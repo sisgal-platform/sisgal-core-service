@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { LoanInstallment } from 'src/entities/loan-installment.model';
 import { PayrollPeriod } from 'src/entities/payroll-period.model';
+import { AUDIT_PORT } from 'src/application/ports/audit/audit.port';
+import { WinstonAuditAdapter } from 'src/infraestructure/logging/winston/winston-audit.adapter';
 import { PayrollPeriodController } from './infraestructure/http/controllers/payroll-period.controller';
 import { PayrollPeriodService } from './application/services/payroll-period.service';
 import { PAYROLL_PERIOD_REPOSITORY_PORT } from './domain/ports/payroll-period-repository.port';
@@ -17,7 +20,7 @@ import { PreLiquidationService } from './application/services/pre-liquidation.se
     AuthModule,
     EmployeeModule,
     NominaModule,
-    TypeOrmModule.forFeature([PayrollPeriod]),
+    TypeOrmModule.forFeature([PayrollPeriod, LoanInstallment]),
   ],
   controllers: [PayrollPeriodController],
   providers: [
@@ -27,6 +30,10 @@ import { PreLiquidationService } from './application/services/pre-liquidation.se
     {
       provide: PAYROLL_PERIOD_REPOSITORY_PORT,
       useClass: PayrollPeriodTypeOrmRepository,
+    },
+    {
+      provide: AUDIT_PORT,
+      useClass: WinstonAuditAdapter,
     },
   ],
   exports: [PAYROLL_PERIOD_REPOSITORY_PORT],

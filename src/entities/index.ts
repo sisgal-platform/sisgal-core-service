@@ -16,3 +16,4 @@ export {WorkdayConfig} from './workday-config.model';
 export {Position} from './position.model';
 export {EmployeeLoan} from './employee_loan.model';
 export {Holiday} from './holiday.model';
+export {LoanInstallment} from './loan-installment.model';

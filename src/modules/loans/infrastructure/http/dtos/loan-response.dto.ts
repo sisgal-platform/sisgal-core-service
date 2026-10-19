@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { EmployeeLoan } from 'src/entities';
+import { LoanPeriodicity } from '../../../enums/loan-periodicity.enum';
 import { LoanStatus } from '../../../enums/loan-status.enum';
 
 export class LoanEmployeeResponseDto {
@@ -47,6 +48,13 @@ export class LoanResponseDto {
   @ApiProperty({ example: '2026-01-15', type: String })
   grantedAt!: Date;
 
+  @ApiProperty({
+    description: 'Cada cuánto se descuenta una cuota en la liquidación',
+    enum: LoanPeriodicity,
+    example: LoanPeriodicity.MENSUAL,
+  })
+  periodicity!: LoanPeriodicity;
+
   @ApiProperty({ enum: LoanStatus, example: LoanStatus.ACTIVO })
   status!: LoanStatus;
 
@@ -72,6 +80,7 @@ export class LoanResponseDto {
     dto.pendingInstallments = entity.pendingInstallments;
     dto.outstandingBalance = Number(entity.outstandingBalance);
     dto.grantedAt = entity.grantedAt;
+    dto.periodicity = entity.periodicity;
     dto.status = entity.status;
     dto.createdAt = entity.createdAt;
     dto.updatedAt = entity.updatedAt;

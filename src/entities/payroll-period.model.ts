@@ -7,6 +7,7 @@ import {
   OneToMany,
 } from 'typeorm';
 import { Employee } from './employee.model';
+import { LoanInstallment } from './loan-installment.model';
 import { PayrollLine } from './payroll_line.model';
 
 @Entity()
@@ -40,4 +41,11 @@ export class PayrollPeriod {
     cascade: ['insert'],
   })
   payroll_lines!: PayrollLine[];
+
+  /** Cuotas de préstamos descontadas en esta liquidación. */
+  @OneToMany(
+    () => LoanInstallment,
+    (loanInstallment) => loanInstallment.payrollPeriod,
+  )
+  loan_installments?: LoanInstallment[];
 }
