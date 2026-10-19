@@ -12,6 +12,7 @@ describe('PayrollPeriodTypeOrmRepository', () => {
   const payrollPeriodRepositoryMock = {
     createQueryBuilder: jest.fn(),
     findOne: jest.fn(),
+    save: jest.fn(),
   };
   let repository: PayrollPeriodTypeOrmRepository;
 
@@ -39,9 +40,9 @@ describe('PayrollPeriodTypeOrmRepository', () => {
         periodEnd: '2026-09-30',
       });
 
-      expect(payrollPeriodRepositoryMock.createQueryBuilder).toHaveBeenCalledWith(
-        'payrollPeriod',
-      );
+      expect(
+        payrollPeriodRepositoryMock.createQueryBuilder,
+      ).toHaveBeenCalledWith('payrollPeriod');
       expect(queryBuilder.leftJoinAndSelect).toHaveBeenCalledWith(
         'payrollPeriod.employee',
         'employee',
@@ -103,6 +104,18 @@ describe('PayrollPeriodTypeOrmRepository', () => {
       const resultado = await repository.findById(99);
 
       expect(resultado).toBeNull();
+    });
+  });
+
+  describe('save', () => {
+    it('delega el guardado de la liquidación y sus líneas al repositorio', async () => {
+      const payrollPeriod = { id: 5 } as PayrollPeriod;
+      payrollPeriodRepositoryMock.save.mockResolvedValue(payrollPeriod);
+
+      await expect(repository.save(payrollPeriod)).resolves.toBe(payrollPeriod);
+      expect(payrollPeriodRepositoryMock.save).toHaveBeenCalledWith(
+        payrollPeriod,
+      );
     });
   });
 });
