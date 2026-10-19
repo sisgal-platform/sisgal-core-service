@@ -46,6 +46,13 @@ describe('PreLiquidationService', () => {
       configSnapshot: {},
       earnings: [{ conceptName: 'Salario base', amount: 1800000 }],
       deductions: [{ conceptName: 'Deducciones legales', amount: 150000 }],
+      workedHours: [
+        {
+          type: 'ORDINARIA_DIURNA',
+          label: 'Horas ordinarias diurnas',
+          hours: 176,
+        },
+      ],
     });
 
     await expect(service.generate(1, period)).resolves.toMatchObject({
@@ -59,6 +66,13 @@ describe('PreLiquidationService', () => {
       totalEarnings: 1800000,
       totalDeductions: 150000,
       netPay: 1650000,
+      workedHours: [
+        {
+          type: 'ORDINARIA_DIURNA',
+          label: 'Horas ordinarias diurnas',
+          hours: 176,
+        },
+      ],
     });
     expect(nominaService.calculatePreLiquidation).toHaveBeenCalledWith(
       employee,
