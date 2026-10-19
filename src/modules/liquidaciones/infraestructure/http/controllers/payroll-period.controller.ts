@@ -171,4 +171,38 @@ export class PayrollPeriodController {
   ): Promise<PayrollPeriodDetailResponseDto> {
     return this.preLiquidationService.generate(employeeId, period);
   }
+
+  @Post('liquidaciones/:employeeId')
+  @ApiOperation({
+    summary: 'Generar y guardar la liquidación de un empleado',
+    description:
+      'Calcula la liquidación del período y guarda sus totales, conceptos y configuración utilizada.',
+  })
+  @ApiCreatedResponse({
+    description: 'Liquidación generada y guardada correctamente.',
+    type: PayrollPeriodDetailResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'El identificador o el rango de fechas no son válidos.',
+    type: ErrorResponseDto,
+  })
+  @ApiNotFoundResponse({
+    description: 'No se encontró el empleado indicado.',
+    type: ErrorResponseDto,
+  })
+  @ApiNotImplementedResponse({
+    description:
+      'El cálculo integral de preliquidación aún no está implementado.',
+    type: ErrorResponseDto,
+  })
+  @ApiInternalServerErrorResponse({
+    description: 'Se produjo un error interno al generar la liquidación.',
+    type: ErrorResponseDto,
+  })
+  async generatePayrollPeriod(
+    @Param('employeeId', ParseIntPipe) employeeId: number,
+    @Body() period: PreLiquidationRequestDto,
+  ): Promise<PayrollPeriodDetailResponseDto> {
+    return this.payrollPeriodService.generate(employeeId, period);
+  }
 }

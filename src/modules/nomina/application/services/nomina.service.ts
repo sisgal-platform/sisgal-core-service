@@ -7,6 +7,7 @@ export interface PreLiquidationCalculation {
   totalEarnings: number;
   totalDeductions: number;
   netPay: number;
+  configSnapshot: Record<string, unknown>;
   earnings: PayrollLineResponseDto[];
   deductions: PayrollLineResponseDto[];
 }
@@ -15,13 +16,15 @@ export interface PreLiquidationCalculation {
 export class NominaService {
   constructor(private readonly payrollHoursService: PayrollHoursService) {}
 
-  async calculatePreLiquidation(
+  calculatePreLiquidation(
     _employee: Employee,
     _periodStart: string,
     _periodEnd: string,
   ): Promise<PreLiquidationCalculation> {
-    throw new NotImplementedException(
-      'El cálculo integral de preliquidación aún no está implementado.',
+    return Promise.reject(
+      new NotImplementedException(
+        'El cálculo integral de preliquidación aún no está implementado.',
+      ),
     );
   }
 }

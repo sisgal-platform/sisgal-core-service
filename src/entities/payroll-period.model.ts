@@ -11,8 +11,8 @@ import { PayrollLine } from './payroll_line.model';
 
 @Entity()
 export class PayrollPeriod {
-    @PrimaryGeneratedColumn()
-    id!: number;
+  @PrimaryGeneratedColumn()
+  id!: number;
 
   @Column('date')
   period_start!: Date;
@@ -36,6 +36,8 @@ export class PayrollPeriod {
   @JoinColumn({ name: 'employee_id' })
   employee!: Employee;
 
-  @OneToMany(() => PayrollLine, (payrollLine) => payrollLine.payroll_period)
+  @OneToMany(() => PayrollLine, (payrollLine) => payrollLine.payroll_period, {
+    cascade: ['insert'],
+  })
   payroll_lines!: PayrollLine[];
 }

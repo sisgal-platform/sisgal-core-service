@@ -43,6 +43,7 @@ describe('PreLiquidationService', () => {
       totalEarnings: 1800000,
       totalDeductions: 150000,
       netPay: 1650000,
+      configSnapshot: {},
       earnings: [{ conceptName: 'Salario base', amount: 1800000 }],
       deductions: [{ conceptName: 'Deducciones legales', amount: 150000 }],
     });

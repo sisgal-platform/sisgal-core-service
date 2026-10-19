@@ -4,6 +4,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PayrollPeriodController } from './payroll-period.controller';
 import { PayrollPeriodService } from 'src/modules/liquidaciones/application/services/payroll-period.service';
 import { PayrollSlipPdfService } from 'src/modules/liquidaciones/application/services/payroll-slip-pdf.service';
+import { PreLiquidationService } from 'src/modules/liquidaciones/application/services/pre-liquidation.service';
 import { PayrollPeriod } from 'src/entities/payroll-period.model';
 import { Employee } from 'src/entities/employee.model';
 import { Position } from 'src/entities/position.model';
@@ -23,11 +24,13 @@ describe('PayrollPeriodController', () => {
   const payrollPeriodServiceMock = {
     findAll: jest.fn(),
     findById: jest.fn(),
+    generate: jest.fn(),
   };
 
   const payrollSlipPdfServiceMock = {
     generate: jest.fn(),
   };
+  const preLiquidationServiceMock = { generate: jest.fn() };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -40,6 +43,10 @@ describe('PayrollPeriodController', () => {
         {
           provide: PayrollSlipPdfService,
           useValue: payrollSlipPdfServiceMock,
+        },
+        {
+          provide: PreLiquidationService,
+          useValue: preLiquidationServiceMock,
         },
       ],
     })
@@ -105,7 +112,11 @@ describe('PayrollPeriodController', () => {
 
     it('debe enviar al servicio los filtros recibidos', async () => {
       payrollPeriodServiceMock.findAll.mockResolvedValue([]);
-      const query = { employeeId: 3, periodStart: '2026-09-01', periodEnd: '2026-09-30' };
+      const query = {
+        employeeId: 3,
+        periodStart: '2026-09-01',
+        periodEnd: '2026-09-30',
+      };
 
       await controller.findAll(query);
 
@@ -145,7 +156,10 @@ describe('PayrollPeriodController', () => {
       const resultado = await controller.findById(1);
 
       expect(resultado.earnings).toEqual([
-        expect.objectContaining({ conceptName: 'Salario base', amount: 1800000 }),
+        expect.objectContaining({
+          conceptName: 'Salario base',
+          amount: 1800000,
+        }),
       ]);
       expect(resultado.deductions).toEqual([
         expect.objectContaining({ conceptName: 'Préstamo', amount: 150000 }),
@@ -207,7 +221,9 @@ describe('PayrollPeriodController', () => {
     }
 
     it('debe retornar el PDF generado como un StreamableFile', async () => {
-      payrollPeriodServiceMock.findById.mockResolvedValue(crearLiquidacionConSucursal());
+      payrollPeriodServiceMock.findById.mockResolvedValue(
+        crearLiquidacionConSucursal(),
+      );
       const pdfBuffer = Buffer.from('%PDF-1.4');
       payrollSlipPdfServiceMock.generate.mockResolvedValue(pdfBuffer);
 
@@ -217,8 +233,12 @@ describe('PayrollPeriodController', () => {
     });
 
     it('debe consultar la liquidación por el identificador recibido', async () => {
-      payrollPeriodServiceMock.findById.mockResolvedValue(crearLiquidacionConSucursal());
-      payrollSlipPdfServiceMock.generate.mockResolvedValue(Buffer.from('%PDF-1.4'));
+      payrollPeriodServiceMock.findById.mockResolvedValue(
+        crearLiquidacionConSucursal(),
+      );
+      payrollSlipPdfServiceMock.generate.mockResolvedValue(
+        Buffer.from('%PDF-1.4'),
+      );
 
       await controller.generatePdf(7, resSpy());
 
@@ -226,8 +246,12 @@ describe('PayrollPeriodController', () => {
     });
 
     it('debe establecer los encabezados de respuesta como PDF descargable', async () => {
-      payrollPeriodServiceMock.findById.mockResolvedValue(crearLiquidacionConSucursal());
-      payrollSlipPdfServiceMock.generate.mockResolvedValue(Buffer.from('%PDF-1.4'));
+      payrollPeriodServiceMock.findById.mockResolvedValue(
+        crearLiquidacionConSucursal(),
+      );
+      payrollSlipPdfServiceMock.generate.mockResolvedValue(
+        Buffer.from('%PDF-1.4'),
+      );
       const res = resSpy();
 
       await controller.generatePdf(1, res);
@@ -246,11 +270,29 @@ describe('PayrollPeriodController', () => {
     });
 
     it('debe propagar los errores de generación del PDF', async () => {
-      payrollPeriodServiceMock.findById.mockResolvedValue(crearLiquidacionConSucursal());
+      payrollPeriodServiceMock.findById.mockResolvedValue(
+        crearLiquidacionConSucursal(),
+      );
       const error = new Error('Fallo al generar el PDF');
       payrollSlipPdfServiceMock.generate.mockRejectedValue(error);
 
       await expect(controller.generatePdf(1, resSpy())).rejects.toBe(error);
+    });
+  });
+
+  describe('generatePayrollPeriod', () => {
+    it('delega la generación y persistencia de la liquidación', async () => {
+      const period = {
+        periodStart: '2026-09-01',
+        periodEnd: '2026-09-30',
+      };
+      const liquidacion = { id: 9 } as PayrollPeriod;
+      payrollPeriodServiceMock.generate.mockResolvedValue(liquidacion);
+
+      await expect(controller.generatePayrollPeriod(3, period)).resolves.toBe(
+        liquidacion,
+      );
+      expect(payrollPeriodServiceMock.generate).toHaveBeenCalledWith(3, period);
     });
   });
 });
@@ -259,7 +301,9 @@ describe('PayrollPeriodController', () => {
 // Utilidades
 // =========================================================
 
-function crearLiquidacion(overrides: Partial<PayrollPeriod> = {}): PayrollPeriod {
+function crearLiquidacion(
+  overrides: Partial<PayrollPeriod> = {},
+): PayrollPeriod {
   return Object.assign(new PayrollPeriod(), {
     id: 1,
     period_start: '2026-09-01',
@@ -282,12 +326,17 @@ function crearLiquidacion(overrides: Partial<PayrollPeriod> = {}): PayrollPeriod
 
 // Variante con sucursal/compañía asignada, necesaria para los tests de
 // generatePdf (el mapper exige una asignación vigente a la fecha liquidada).
-function crearLiquidacionConSucursal(overrides: Partial<PayrollPeriod> = {}): PayrollPeriod {
+function crearLiquidacionConSucursal(
+  overrides: Partial<PayrollPeriod> = {},
+): PayrollPeriod {
   const sucursal = Object.assign(new Branch(), {
     name: 'Envigado',
     city: 'Envigado',
     address: 'Calle 46 Sur # 42B-16, Zona 7',
-    company: Object.assign(new Company(), { name: 'JS Burguer Parrilla', nit: '' }),
+    company: Object.assign(new Company(), {
+      name: 'JS Burguer Parrilla',
+      nit: '',
+    }),
   });
   const asignacion = Object.assign(new EmployeeBranchAssignment(), {
     start_date: '2026-01-01',
