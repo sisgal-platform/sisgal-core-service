@@ -32,7 +32,10 @@ export interface PayrollInputsRepositoryPort {
     periodEnd: string,
   ): Promise<DisabilityLeave[]>;
 
-  /** Préstamos activos con cuotas pendientes otorgados hasta el fin del período. */
+  /**
+   * Préstamos activos otorgados hasta el fin del período, tengan o no saldo:
+   * el cálculo valida su información antes de descontar una cuota.
+   */
   findActiveLoans(
     employeeIds: number[],
     periodEnd: string,

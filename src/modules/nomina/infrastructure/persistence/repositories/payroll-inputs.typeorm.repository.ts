@@ -92,8 +92,6 @@ export class PayrollInputsTypeOrmRepository implements PayrollInputsRepositoryPo
       .createQueryBuilder('loan')
       .where('loan.employeeId IN (:...employeeIds)', { employeeIds })
       .andWhere('loan.status = :status', { status: LoanStatus.ACTIVO })
-      .andWhere('loan.pendingInstallments > 0')
-      .andWhere('loan.outstandingBalance > 0')
       .andWhere('loan.grantedAt <= :periodEnd', { periodEnd })
       .orderBy('loan.id', 'ASC')
       .getMany();
