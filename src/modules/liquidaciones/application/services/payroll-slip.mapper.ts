@@ -51,7 +51,7 @@ export function toPayrollSlipData(payrollPeriod: PayrollPeriod): PayrollSlipData
   return {
     company: {
       name: branch.company?.name ?? '',
-      nit: null,
+      nit: branch.company?.nit ?? null,
     },
     branch: {
       name: branch.name,

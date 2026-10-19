@@ -49,7 +49,8 @@ function drawHeader(doc: PDFKit.PDFDocument, data: PayrollSlipData): void {
     .fontSize(9)
     .font('Helvetica')
     .text(
-      // El NIT queda en blanco a propósito: aún no se registra en el sistema.
+      // Si la compañía no tiene NIT registrado, el espacio queda en blanco
+      // en vez de mostrar un dato inventado.
       `NIT: ${data.company.nit ?? ''}`,
       PAGE_MARGIN,
       doc.y + 2,
