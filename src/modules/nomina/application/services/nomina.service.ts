@@ -41,6 +41,14 @@ import {
 } from '../../domain/loan-installments';
 import { formatCalendarDate } from '../../domain/payroll-days';
 import {
+  MISSING_HIRE_DATE_CAUSE,
+  SERVICE_BONUS_DAYS_PER_YEAR_KEY,
+  type ServiceBonus,
+  type ServiceBonusSemester,
+  calculateServiceBonus,
+  findServiceBonusSemesters,
+} from '../../domain/service-bonus';
+import {
   PAYROLL_HOURS_REPOSITORY_PORT,
   type PayrollHoursRepositoryPort,
 } from '../../domain/ports/payroll-hours.repository.port';
@@ -107,6 +115,10 @@ interface CalculationContext {
   payrollHoursService: PayrollHoursService;
   legalDeductionsService: LegalDeductionsService;
   transportAllowanceService: TransportAllowanceService;
+  /** Semestres cuya prima de servicios se paga en el período. */
+  serviceBonusSemesters: ServiceBonusSemester[];
+  /** Días de prima por año; solo se consulta si el período paga prima. */
+  serviceBonusDaysPerYear: number | null;
 }
 
 interface EmployeeInputs {
@@ -215,7 +227,7 @@ export class NominaService {
       return [];
     }
 
-    const context = await this.createCalculationContext(period.periodEnd);
+    const context = await this.createCalculationContext(period);
     const employeeIds = employees.map((employee) => employee.id);
     const [attendanceRecords, disabilityLeaves, loans, payrollPeriods] =
       await Promise.all([
@@ -267,9 +279,10 @@ export class NominaService {
    * para este cálculo sobre repositorios con caché, para consultar cada
    * parámetro una sola vez en todo el lote y no una vez por empleado.
    */
-  private async createCalculationContext(
-    periodEnd: string,
-  ): Promise<CalculationContext> {
+  private async createCalculationContext({
+    periodStart,
+    periodEnd,
+  }: PayrollRange): Promise<CalculationContext> {
     const payrollHoursRepository = cachePayrollHoursLookups(
       this.payrollHoursRepository,
     );
@@ -287,10 +300,34 @@ export class NominaService {
     const systemConfigRepository = cacheSystemConfigLookups(
       this.systemConfigRepository,
     );
+    const serviceBonusSemesters = findServiceBonusSemesters(
+      periodStart,
+      periodEnd,
+    );
+    let serviceBonusDaysPerYear: number | null = null;
+
+    if (serviceBonusSemesters.length > 0) {
+      serviceBonusDaysPerYear = await systemConfigRepository.getValue(
+        SERVICE_BONUS_DAYS_PER_YEAR_KEY,
+        liquidationDate,
+      );
+
+      if (
+        serviceBonusDaysPerYear === null ||
+        !Number.isFinite(serviceBonusDaysPerYear) ||
+        serviceBonusDaysPerYear <= 0
+      ) {
+        throw new UnprocessableEntityException(
+          `No existe un valor vigente y válido para los días de prima de servicios por año al ${formatCalendarDate(periodEnd)}.`,
+        );
+      }
+    }
 
     return {
       liquidationDate,
       dailyWorkHours,
+      serviceBonusSemesters,
+      serviceBonusDaysPerYear,
       payrollHoursService: new PayrollHoursService(payrollHoursRepository),
       legalDeductionsService: new LegalDeductionsService(
         systemConfigRepository,
@@ -320,6 +357,9 @@ export class NominaService {
           `Ya tiene una liquidación registrada del ${formatCalendarDate(aFechaCalendario(payrollPeriod.period_start))} al ${formatCalendarDate(aFechaCalendario(payrollPeriod.period_end))}.`,
       ),
       ...attendance.causes,
+      ...(context.serviceBonusSemesters.length > 0 && !employee.hire_date
+        ? [MISSING_HIRE_DATE_CAUSE]
+        : []),
     ];
 
     if (causes.length > 0) {
@@ -386,13 +426,36 @@ export class NominaService {
           },
         })),
       ];
-      const totals = calculateTotals(earnings.earnings, deductions);
+      // La prima no es salario: no cambia la base de salud y pensión ni el
+      // límite de las cuotas de préstamos, solo el total devengado.
+      const serviceBonuses = this.calculateServiceBonuses(
+        employee,
+        salary,
+        transportAllowance.allowanceAmount,
+        context,
+      );
+      const allEarnings: PayrollLineResponseDto[] = [
+        ...earnings.earnings,
+        ...serviceBonuses.map((bonus) => ({
+          conceptName: bonus.conceptName,
+          amount: bonus.amount,
+          serviceBonus: {
+            semesterStart: bonus.semesterStart,
+            semesterEnd: bonus.semesterEnd,
+            workedDays: bonus.workedDays,
+            semesterDays: bonus.semesterDays,
+            baseAmount: bonus.baseAmount,
+            isProportional: bonus.isProportional,
+          },
+        })),
+      ];
+      const totals = calculateTotals(allEarnings, deductions);
 
       return {
         employee,
         calculation: {
           ...totals,
-          earnings: earnings.earnings,
+          earnings: allEarnings,
           deductions,
           workedHours: earnings.workedHours,
           loanInstallments: loanPlan.installments,
@@ -415,6 +478,11 @@ export class NominaService {
             loanObservations: loanPlan.observations.map(
               (observation) => observation.message,
             ),
+            hireDate: employee.hire_date
+              ? aFechaCalendario(employee.hire_date)
+              : null,
+            serviceBonusDaysPerYear: context.serviceBonusDaysPerYear,
+            serviceBonuses,
             workedHours: earnings.workedHours,
           },
         },
@@ -426,6 +494,39 @@ export class NominaService {
 
       throw error;
     }
+  }
+
+  /**
+   * Prima de cada semestre que se paga en el período. La fecha de ingreso ya
+   * se validó al reunir las causas del empleado.
+   */
+  private calculateServiceBonuses(
+    employee: Employee,
+    salary: number,
+    transportAllowance: number,
+    context: CalculationContext,
+  ): ServiceBonus[] {
+    if (
+      !employee.hire_date ||
+      context.serviceBonusDaysPerYear === null ||
+      context.serviceBonusSemesters.length === 0
+    ) {
+      return [];
+    }
+
+    const hireDate = aFechaCalendario(employee.hire_date);
+    const daysPerYear = context.serviceBonusDaysPerYear;
+
+    return context.serviceBonusSemesters.flatMap((semester) => {
+      const bonus = calculateServiceBonus({
+        semester,
+        hireDate,
+        salaryBase: salary,
+        transportAllowance,
+        daysPerYear,
+      });
+      return bonus ? [bonus] : [];
+    });
   }
 
   /**

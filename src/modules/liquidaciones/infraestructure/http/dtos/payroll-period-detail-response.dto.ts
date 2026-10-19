@@ -1,7 +1,10 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { PayrollPeriod } from '../../../../../entities/payroll-period.model';
 import { PayrollPeriodResponseDto } from './payroll-period-response.dto';
-import { PayrollLineResponseDto } from './payroll-line-response.dto';
+import {
+  PayrollLineResponseDto,
+  type PayrollLineServiceBonusResponseDto,
+} from './payroll-line-response.dto';
 import { WorkedHoursResponseDto } from './worked-hours-response.dto';
 import type { Employee } from '../../../../../entities/employee.model';
 import type { PreLiquidationRequestDto } from 'src/modules/nomina/infrastructure/http/dtos/pre-liquidation-request.dto';
@@ -17,6 +20,34 @@ function savedObservations(
         (observation): observation is string => typeof observation === 'string',
       )
     : [];
+}
+
+// La prima de cada semestre queda en el snapshot con el nombre de su concepto.
+function savedServiceBonuses(
+  configSnapshot: Record<string, unknown> | null | undefined,
+): Map<string, PayrollLineServiceBonusResponseDto> {
+  const bonuses = configSnapshot?.serviceBonuses;
+  const byConcept = new Map<string, PayrollLineServiceBonusResponseDto>();
+
+  if (!Array.isArray(bonuses)) {
+    return byConcept;
+  }
+
+  for (const bonus of bonuses as Record<string, unknown>[]) {
+    if (typeof bonus?.conceptName !== 'string') {
+      continue;
+    }
+    byConcept.set(bonus.conceptName, {
+      semesterStart: String(bonus.semesterStart),
+      semesterEnd: String(bonus.semesterEnd),
+      workedDays: Number(bonus.workedDays),
+      semesterDays: Number(bonus.semesterDays),
+      baseAmount: Number(bonus.baseAmount),
+      isProportional: Boolean(bonus.isProportional),
+    });
+  }
+
+  return byConcept;
 }
 
 export class PayrollPeriodDetailResponseDto extends PayrollPeriodResponseDto {
@@ -91,9 +122,19 @@ export class PayrollPeriodDetailResponseDto extends PayrollPeriodResponseDto {
         installment,
       ]),
     );
+    const serviceBonusesByConcept = savedServiceBonuses(
+      payrollPeriod.config_snapshot,
+    );
     dto.earnings = lines
       .filter((line) => line.type === 'DEVENGADO')
-      .map((line) => PayrollLineResponseDto.fromEntity(line));
+      .map((line) => {
+        const earning = PayrollLineResponseDto.fromEntity(line);
+        const serviceBonus = serviceBonusesByConcept.get(line.concept_name);
+        if (serviceBonus) {
+          earning.serviceBonus = serviceBonus;
+        }
+        return earning;
+      });
     dto.deductions = lines
       .filter((line) => line.type === 'DEDUCCION')
       .map((line) =>
