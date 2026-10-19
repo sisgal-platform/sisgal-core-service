@@ -14,6 +14,7 @@ import { DocumentType } from 'src/modules/empleados/domain/value-objects/documen
 import {
   DuplicateDocumentError,
   EmptyDocumentNumberError,
+  FutureHireDateError,
   InvalidDocumentFormatError,
   InvalidSalaryError,
 } from 'src/modules/empleados/domain/errors/employee.errors';
@@ -105,6 +106,7 @@ describe('EmployeeController', () => {
         salaryBase: 1800000,
         position: 'Auxiliar de cocina',
         status: 'ACTIVO',
+        hireDate: '2026-02-15',
         branchId: 3,
         positionId: 1,
       });
@@ -120,6 +122,7 @@ describe('EmployeeController', () => {
       ['InvalidSalaryError', new InvalidSalaryError()],
       ['EmptyDocumentNumberError', new EmptyDocumentNumberError()],
       ['InvalidDocumentFormatError', new InvalidDocumentFormatError()],
+      ['FutureHireDateError', new FutureHireDateError()],
     ])(
       'debe traducir %s a BadRequestException',
       async (_nombre, error: Error) => {
@@ -207,6 +210,7 @@ function crearEmpleado(): Employee {
     document: '1020304050',
     phone: '3001234567',
     salary_base: 1800000,
+    hire_date: '2026-02-15',
     position: 'Auxiliar de cocina',
     jobPosition: Object.assign(new Position(), { id: 1 }),
     status: 'ACTIVO',

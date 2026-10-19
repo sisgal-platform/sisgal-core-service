@@ -42,6 +42,37 @@ export class PayrollLineLoanResponseDto {
   }
 }
 
+export class PayrollLineServiceBonusResponseDto {
+  @ApiProperty({ description: 'Inicio del semestre', example: '2026-01-01' })
+  semesterStart!: string;
+
+  @ApiProperty({ description: 'Fin del semestre', example: '2026-06-30' })
+  semesterEnd!: string;
+
+  @ApiProperty({
+    description: 'Días trabajados del semestre (base 360)',
+    example: 120,
+  })
+  workedDays!: number;
+
+  @ApiProperty({ description: 'Días del semestre completo', example: 180 })
+  semesterDays!: number;
+
+  @ApiProperty({
+    description:
+      'Base de la prima: salario base más auxilio de transporte si el empleado tiene derecho',
+    example: 1749095,
+  })
+  baseAmount!: number;
+
+  @ApiProperty({
+    description:
+      'Indica si la prima es proporcional porque el empleado no trabajó todo el semestre',
+    example: true,
+  })
+  isProportional!: boolean;
+}
+
 export class PayrollLineResponseDto {
   @ApiProperty({
     description:
@@ -62,6 +93,13 @@ export class PayrollLineResponseDto {
     type: PayrollLineLoanResponseDto,
   })
   loan?: PayrollLineLoanResponseDto;
+
+  @ApiPropertyOptional({
+    description:
+      'Semestre y tiempo trabajado de la prima; solo en la prima de servicios',
+    type: PayrollLineServiceBonusResponseDto,
+  })
+  serviceBonus?: PayrollLineServiceBonusResponseDto;
 
   static fromEntity(
     payrollLine: PayrollLine,

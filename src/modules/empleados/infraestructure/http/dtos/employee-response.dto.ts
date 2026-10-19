@@ -45,6 +45,13 @@ export class EmployeeResponseDto {
   salaryBase!: number;
 
   @ApiProperty({
+    description: 'Fecha de ingreso (YYYY-MM-DD); null si no se ha registrado',
+    example: '2026-02-15',
+    nullable: true,
+  })
+  hireDate!: string | null;
+
+  @ApiProperty({
     description: 'Cargo del empleado',
     example: 'Auxiliar de cocina',
   })
@@ -93,6 +100,7 @@ export class EmployeeResponseDto {
     dto.document = employee.document;
     dto.phone = employee.phone;
     dto.salaryBase = employee.salary_base;
+    dto.hireDate = employee.hire_date ?? null;
     dto.position = employee.position;
     dto.status = employee.status;
     const current = employee.employee_branch_assig?.find((a) => a.is_current);

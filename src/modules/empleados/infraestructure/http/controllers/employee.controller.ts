@@ -18,7 +18,7 @@ import { RegisterEmployeeDto } from '../dtos/register-employee.dto';
 import { ListEmployeesQueryDto } from '../dtos/list-employees-query.dto';
 import { UpdateEmployeeDto } from '../dtos/update-employee.dto';
 import { EmployeeResponseDto } from '../dtos/employee-response.dto';
-import { DuplicateDocumentError, EmptyDocumentNumberError, InvalidDocumentFormatError, InvalidSalaryError } from 'src/modules/empleados/domain/errors/employee.errors';
+import { DuplicateDocumentError, EmptyDocumentNumberError, FutureHireDateError, InvalidDocumentFormatError, InvalidSalaryError } from 'src/modules/empleados/domain/errors/employee.errors';
 import { Roles } from '../../../../../infraestructure/auth/decorators/roles.decorator';
 import { Role } from '../../../../../application/ports/auth/auth-user';
 import type { AuthUser } from '../../../../../application/ports/auth/auth-user';
@@ -73,7 +73,8 @@ export class EmployeeController {
         }catch(error){
             if (error instanceof InvalidSalaryError ||
                 error instanceof EmptyDocumentNumberError ||
-                error instanceof InvalidDocumentFormatError
+                error instanceof InvalidDocumentFormatError ||
+                error instanceof FutureHireDateError
             ) { throw new BadRequestException(error.message); }
 
             if (error instanceof DuplicateDocumentError) {
@@ -140,7 +141,8 @@ export class EmployeeController {
         } catch (error) {
             if (error instanceof InvalidSalaryError ||
                 error instanceof EmptyDocumentNumberError ||
-                error instanceof InvalidDocumentFormatError
+                error instanceof InvalidDocumentFormatError ||
+                error instanceof FutureHireDateError
             ) { throw new BadRequestException(error.message); }
 
             if (error instanceof DuplicateDocumentError) {

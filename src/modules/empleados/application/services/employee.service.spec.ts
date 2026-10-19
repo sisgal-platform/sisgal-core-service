@@ -16,6 +16,7 @@ import { DocumentType } from '../../domain/value-objects/document-type.enum';
 import {
   DuplicateDocumentError,
   EmptyDocumentNumberError,
+  FutureHireDateError,
   InvalidDocumentFormatError,
   InvalidSalaryError,
 } from '../../domain/errors/employee.errors';
@@ -254,6 +255,29 @@ describe('EmployeeService', () => {
       expect(employeeRepositoryMock.save).not.toHaveBeenCalled();
     });
 
+    it('debe guardar la fecha de ingreso recibida', async () => {
+      const resultado = await service.register(
+        crearDto({ hireDate: '2026-02-15' }),
+        actor,
+      );
+
+      expect(resultado.hire_date).toBe('2026-02-15');
+    });
+
+    it('debe dejar la fecha de ingreso vacía cuando no se envía', async () => {
+      const resultado = await service.register(crearDto(), actor);
+
+      expect(resultado.hire_date).toBeNull();
+    });
+
+    it('debe lanzar FutureHireDateError cuando la fecha de ingreso es posterior a hoy', async () => {
+      await expect(
+        service.register(crearDto({ hireDate: '2999-01-01' }), actor),
+      ).rejects.toThrow(FutureHireDateError);
+
+      expect(employeeRepositoryMock.save).not.toHaveBeenCalled();
+    });
+
     it('debe propagar el error cuando falla el guardado', async () => {
       employeeRepositoryMock.save.mockRejectedValue(new Error('Error de BD'));
 
@@ -384,6 +408,24 @@ describe('EmployeeService', () => {
       await expect(
         service.update(5, { salaryBase: 0 }, actor),
       ).rejects.toThrow(InvalidSalaryError);
+
+      expect(employeeRepositoryMock.save).not.toHaveBeenCalled();
+    });
+
+    it('debe registrar la fecha de ingreso de un empleado que no la tenía', async () => {
+      const resultado = await service.update(
+        5,
+        { hireDate: '2025-11-03' },
+        actor,
+      );
+
+      expect(resultado.hireDate).toBe('2025-11-03');
+    });
+
+    it('debe rechazar una fecha de ingreso futura al actualizar', async () => {
+      await expect(
+        service.update(5, { hireDate: '2999-01-01' }, actor),
+      ).rejects.toThrow(FutureHireDateError);
 
       expect(employeeRepositoryMock.save).not.toHaveBeenCalled();
     });

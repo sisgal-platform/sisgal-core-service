@@ -31,3 +31,11 @@ export class DuplicateDocumentError extends Error {
     Object.setPrototypeOf(this, new.target.prototype);
   }
 }
+
+export class FutureHireDateError extends Error {
+  constructor() {
+    super('La fecha de ingreso no puede ser posterior a la fecha actual');
+    this.name = 'FutureHireDateError';
+    Object.setPrototypeOf(this, new.target.prototype);
+  }
+}

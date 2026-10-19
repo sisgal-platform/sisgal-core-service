@@ -13,6 +13,8 @@ import { EmployeeResponseDto } from '../../infraestructure/http/dtos/employee-re
 import { Employee } from 'src/entities/employee.model';
 import { DocumentId } from '../../domain/value-objects/document-id.vo';
 import { Salary } from '../../domain/value-objects/salary.vo';
+import { HireDate } from '../../domain/value-objects/hire-date.vo';
+import { getColombiaDate } from 'src/shared/common/utils/colombia-date.util';
 import { DuplicateDocumentError } from '../../domain/errors/employee.errors';
 import {
   BRANCH_REPOSITORY_PORT,
@@ -47,6 +49,10 @@ export class EmployeeService {
     // Los value objects validan tipo/número de documento y salario (lanzan error de dominio si son inválidos)
     const document = DocumentId.create(dto.documentType, dto.documentNumber);
     const salary = Salary.create(dto.salaryBase);
+    const hireDate =
+      dto.hireDate === undefined
+        ? null
+        : HireDate.create(dto.hireDate, getColombiaDate(new Date()));
 
     // No se permite registrar dos empleados con el mismo documento
     const existing = await this.employeeRepository.findByDocument(
@@ -98,6 +104,7 @@ export class EmployeeService {
     employee.document_type = document.getType();
     employee.phone = dto.phone;
     employee.salary_base = salary.getvalue();
+    employee.hire_date = hireDate?.getValue() ?? null;
     // "position" queda como copia histórica del nombre; "jobPosition" es el vínculo vivo al catálogo
     employee.position = jobPosition.name;
     employee.jobPosition = jobPosition;
@@ -238,6 +245,12 @@ export class EmployeeService {
     if (dto.salaryBase !== undefined) {
       // Misma regla que al registrar: el salario debe ser mayor que cero
       employee.salary_base = Salary.create(dto.salaryBase).getvalue();
+    }
+    if (dto.hireDate !== undefined) {
+      employee.hire_date = HireDate.create(
+        dto.hireDate,
+        getColombiaDate(new Date()),
+      ).getValue();
     }
 
     try {
