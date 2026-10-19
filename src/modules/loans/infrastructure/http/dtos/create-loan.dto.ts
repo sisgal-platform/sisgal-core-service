@@ -1,13 +1,16 @@
 import { Type } from 'class-transformer';
 import {
   IsDateString,
+  IsEnum,
   IsInt,
   IsNumber,
+  IsOptional,
   Matches,
   Max,
   Min,
 } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { LoanPeriodicity } from '../../../enums/loan-periodicity.enum';
 
 export class CreateLoanDto {
   @ApiProperty({
@@ -59,4 +62,16 @@ export class CreateLoanDto {
     message: 'La fecha de otorgamiento debe tener formato YYYY-MM-DD.',
   })
   grantedAt!: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Cada cuánto se descuenta una cuota: MENSUAL (el último día de cada mes) o QUINCENAL (el día 15 y el último día de cada mes). Por defecto, MENSUAL.',
+    enum: LoanPeriodicity,
+    example: LoanPeriodicity.MENSUAL,
+  })
+  @IsOptional()
+  @IsEnum(LoanPeriodicity, {
+    message: 'La periodicidad del préstamo no es válida.',
+  })
+  periodicity?: LoanPeriodicity;
 }
