@@ -1,6 +1,7 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { EmployeeLoan } from 'src/entities';
 import { CreateLoanDto } from '../../infrastructure/http/dtos/create-loan.dto';
+import { LoanPeriodicity } from '../../enums/loan-periodicity.enum';
 import { LoanStatus } from '../../enums/loan-status.enum';
 import { LoanRepositoryPort } from '../../domain/ports/loan.repository.port';
 import { LoanService } from './loan.service';
@@ -50,21 +51,56 @@ describe('LoanService', () => {
           employee,
           employeeId: 7,
           totalAmount: 1000,
-          installmentAmount: 333.33,
+          // 1.000 / 3 redondeado al peso; la última cuota descuenta el saldo restante.
+          installmentAmount: 333,
           totalInstallments: 3,
           pendingInstallments: 3,
           outstandingBalance: 1000,
           grantedAt: new Date('2026-03-10T00:00:00.000Z'),
+          periodicity: LoanPeriodicity.MENSUAL,
           status: LoanStatus.ACTIVO,
         }),
       );
       expect(result).toMatchObject({
         id: 22,
         employee: { id: 7, documentType: 'CC' },
-        installmentAmount: 333.33,
+        installmentAmount: 333,
         pendingInstallments: 3,
         outstandingBalance: 1000,
+        periodicity: LoanPeriodicity.MENSUAL,
       });
+    });
+
+    it('guarda la periodicidad indicada y redondea la cuota al peso más cercano', async () => {
+      loanRepository.findEmployeeById.mockResolvedValue({ id: 7 } as any);
+      loanRepository.save.mockImplementation(async (loan) => loan);
+
+      await service.crear({
+        ...dto,
+        totalAmount: 1000,
+        totalInstallments: 6,
+        periodicity: LoanPeriodicity.QUINCENAL,
+      });
+
+      expect(loanRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          installmentAmount: 167,
+          periodicity: LoanPeriodicity.QUINCENAL,
+        }),
+      );
+    });
+
+    it('rechaza un préstamo cuya cuota sería menor que un peso', async () => {
+      loanRepository.findEmployeeById.mockResolvedValue({ id: 7 } as any);
+
+      await expect(
+        service.crear({ ...dto, totalAmount: 1, totalInstallments: 3 }),
+      ).rejects.toThrow(
+        new BadRequestException(
+          'El valor de cada cuota debe ser de al menos un peso.',
+        ),
+      );
+      expect(loanRepository.save).not.toHaveBeenCalled();
     });
 
     it('rechaza la creación cuando el empleado no existe', async () => {

@@ -53,6 +53,15 @@ describe('NominaController', () => {
           hours: 8,
         },
       ],
+      loanInstallments: [],
+      loanObservations: [
+        {
+          loanId: 4,
+          reason: 'LIMITE_DEDUCCIONES' as const,
+          message: 'La cuota del préstamo #4 se descontó parcialmente.',
+          details: {},
+        },
+      ],
       configSnapshot: {},
     };
   }
@@ -157,6 +166,7 @@ describe('NominaController', () => {
             hours: 8,
           },
         ],
+        observations: ['La cuota del préstamo #4 se descontó parcialmente.'],
       });
     });
 

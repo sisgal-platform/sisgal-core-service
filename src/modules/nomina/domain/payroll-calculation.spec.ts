@@ -2,7 +2,6 @@ import {
   EarningsInput,
   calculateEarnings,
   calculateHourValue,
-  calculateLoanDeductions,
   calculateTotals,
 } from './payroll-calculation';
 import { PayrollInconsistencyError } from './errors/payroll-inconsistency.error';
@@ -300,49 +299,6 @@ describe('payroll-calculation', () => {
       expect(() => calculateEarnings(buildInput({ monthlySalary: 0 }))).toThrow(
         PayrollInconsistencyError,
       );
-    });
-  });
-
-  describe('calculateLoanDeductions', () => {
-    it('descuenta una cuota por cada préstamo con cuotas y saldo pendientes', () => {
-      expect(
-        calculateLoanDeductions([
-          {
-            loanId: 12,
-            installmentAmount: 50_000,
-            outstandingBalance: 100_000,
-            pendingInstallments: 2,
-          },
-          {
-            loanId: 2,
-            installmentAmount: 100_000,
-            outstandingBalance: 300_000,
-            pendingInstallments: 3,
-          },
-          {
-            loanId: 7,
-            installmentAmount: 400_000,
-            outstandingBalance: 0,
-            pendingInstallments: 0,
-          },
-        ]),
-      ).toEqual([
-        { conceptName: 'Cuota préstamo #2', amount: 100_000 },
-        { conceptName: 'Cuota préstamo #12', amount: 50_000 },
-      ]);
-    });
-
-    it('no descuenta más que el saldo pendiente', () => {
-      expect(
-        calculateLoanDeductions([
-          {
-            loanId: 1,
-            installmentAmount: 200_000,
-            outstandingBalance: 80_000,
-            pendingInstallments: 1,
-          },
-        ]),
-      ).toEqual([{ conceptName: 'Cuota préstamo #1', amount: 80_000 }]);
     });
   });
 

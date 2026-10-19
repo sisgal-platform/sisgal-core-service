@@ -1,5 +1,11 @@
 import { Repository } from 'typeorm';
+import { EmployeeLoan } from 'src/entities/employee_loan.model';
+import { LoanInstallment } from 'src/entities/loan-installment.model';
+import { PayrollLine } from 'src/entities/payroll_line.model';
 import { PayrollPeriod } from 'src/entities/payroll-period.model';
+import { LoanInstallmentConflictError } from 'src/modules/liquidaciones/domain/errors/loan-installment-conflict.error';
+import { LoanStatus } from 'src/modules/loans/enums/loan-status.enum';
+import type { LoanInstallmentPlan } from 'src/modules/nomina/domain/loan-installments';
 import { PayrollPeriodTypeOrmRepository } from './payroll-period.typeorm.repository';
 
 describe('PayrollPeriodTypeOrmRepository', () => {
@@ -9,10 +15,26 @@ describe('PayrollPeriodTypeOrmRepository', () => {
     orderBy: jest.fn(),
     getMany: jest.fn(),
   };
+  const lockQueryBuilder = {
+    setLock: jest.fn(),
+    where: jest.fn(),
+    getMany: jest.fn(),
+  };
+  const entityManager = {
+    getRepository: jest.fn(),
+    save: jest.fn(),
+    update: jest.fn(),
+  };
   const payrollPeriodRepositoryMock = {
     createQueryBuilder: jest.fn(),
     findOne: jest.fn(),
     save: jest.fn(),
+    manager: {
+      transaction: jest.fn(
+        async (work: (manager: typeof entityManager) => Promise<unknown>) =>
+          work(entityManager),
+      ),
+    },
   };
   let repository: PayrollPeriodTypeOrmRepository;
 
@@ -24,6 +46,11 @@ describe('PayrollPeriodTypeOrmRepository', () => {
     payrollPeriodRepositoryMock.createQueryBuilder.mockReturnValue(
       queryBuilder,
     );
+    lockQueryBuilder.setLock.mockReturnValue(lockQueryBuilder);
+    lockQueryBuilder.where.mockReturnValue(lockQueryBuilder);
+    entityManager.getRepository.mockReturnValue({
+      createQueryBuilder: () => lockQueryBuilder,
+    });
 
     repository = new PayrollPeriodTypeOrmRepository(
       payrollPeriodRepositoryMock as unknown as Repository<PayrollPeriod>,
@@ -94,6 +121,7 @@ describe('PayrollPeriodTypeOrmRepository', () => {
             },
           },
           payroll_lines: true,
+          loan_installments: true,
         },
       });
     });
@@ -116,6 +144,138 @@ describe('PayrollPeriodTypeOrmRepository', () => {
       expect(payrollPeriodRepositoryMock.save).toHaveBeenCalledWith(
         payrollPeriod,
       );
+      expect(
+        payrollPeriodRepositoryMock.manager.transaction,
+      ).not.toHaveBeenCalled();
+    });
+
+    describe('con cuotas de préstamos', () => {
+      const plan: LoanInstallmentPlan = {
+        loanId: 7,
+        conceptName: 'Cuota préstamo #7',
+        cutoffDates: ['2026-09-30'],
+        installments: 1,
+        scheduledAmount: 200000,
+        amount: 200000,
+        previousBalance: 400000,
+        newBalance: 200000,
+        previousPendingInstallments: 2,
+        remainingInstallments: 1,
+      };
+
+      function payrollPeriodWithLoanLine(): PayrollPeriod {
+        return Object.assign(new PayrollPeriod(), {
+          employee: { id: 3 },
+          payroll_lines: [
+            Object.assign(new PayrollLine(), {
+              concept_name: 'Salud',
+              type: 'DEDUCCION',
+              amount: 80000,
+            }),
+            Object.assign(new PayrollLine(), {
+              concept_name: 'Cuota préstamo #7',
+              type: 'DEDUCCION',
+              amount: 200000,
+            }),
+          ],
+        });
+      }
+
+      function lockedLoan(overrides: Partial<EmployeeLoan> = {}) {
+        return Object.assign(new EmployeeLoan(), {
+          id: 7,
+          status: LoanStatus.ACTIVO,
+          // TypeORM entrega las columnas numeric como texto.
+          outstandingBalance: '400000.00',
+          pendingInstallments: 2,
+          ...overrides,
+        });
+      }
+
+      beforeEach(() => {
+        lockQueryBuilder.getMany.mockResolvedValue([lockedLoan()]);
+        entityManager.save.mockImplementation(async (entity: object) => {
+          if (entity instanceof PayrollPeriod) {
+            entity.id = 12;
+            entity.payroll_lines.forEach((line, index) => {
+              line.id = 50 + index;
+            });
+          }
+          return entity;
+        });
+      });
+
+      it('bloquea los préstamos y registra la liquidación, la cuota y el nuevo saldo en una transacción', async () => {
+        const saved = await repository.save(payrollPeriodWithLoanLine(), [
+          plan,
+        ]);
+
+        expect(
+          payrollPeriodRepositoryMock.manager.transaction,
+        ).toHaveBeenCalled();
+        expect(payrollPeriodRepositoryMock.save).not.toHaveBeenCalled();
+        expect(entityManager.getRepository).toHaveBeenCalledWith(EmployeeLoan);
+        expect(lockQueryBuilder.setLock).toHaveBeenCalledWith(
+          'pessimistic_write',
+        );
+        expect(lockQueryBuilder.where).toHaveBeenCalledWith(
+          'loan.id IN (:...loanIds)',
+          { loanIds: [7] },
+        );
+        expect(entityManager.save).toHaveBeenCalledWith(
+          expect.objectContaining({
+            loanId: 7,
+            employeeId: 3,
+            payrollPeriodId: 12,
+            payrollLineId: 51,
+            installmentsApplied: 1,
+            scheduledAmount: 200000,
+            amount: 200000,
+            previousBalance: 400000,
+            newBalance: 200000,
+            previousPendingInstallments: 2,
+            remainingInstallments: 1,
+          }),
+        );
+        expect(entityManager.update).toHaveBeenCalledWith(
+          EmployeeLoan,
+          { id: 7 },
+          {
+            outstandingBalance: 200000,
+            pendingInstallments: 1,
+            status: LoanStatus.ACTIVO,
+          },
+        );
+        expect(saved.loan_installments).toEqual([expect.any(LoanInstallment)]);
+      });
+
+      it('marca el préstamo como saldado cuando el saldo llega a cero', async () => {
+        await repository.save(payrollPeriodWithLoanLine(), [
+          { ...plan, newBalance: 0, remainingInstallments: 0, amount: 400000 },
+        ]);
+
+        expect(entityManager.update).toHaveBeenCalledWith(
+          EmployeeLoan,
+          { id: 7 },
+          expect.objectContaining({ status: LoanStatus.SALDADO }),
+        );
+      });
+
+      it.each([
+        ['otro descuento cambió su saldo', { outstandingBalance: '200000.00' }],
+        ['cambiaron sus cuotas pendientes', { pendingInstallments: 1 }],
+        ['ya no está activo', { status: LoanStatus.CANCELADO }],
+      ])('no guarda nada cuando el préstamo %s', async (_case, overrides) => {
+        lockQueryBuilder.getMany.mockResolvedValue([
+          lockedLoan(overrides as Partial<EmployeeLoan>),
+        ]);
+
+        await expect(
+          repository.save(payrollPeriodWithLoanLine(), [plan]),
+        ).rejects.toThrow(LoanInstallmentConflictError);
+        expect(entityManager.save).not.toHaveBeenCalled();
+        expect(entityManager.update).not.toHaveBeenCalled();
+      });
     });
   });
 });

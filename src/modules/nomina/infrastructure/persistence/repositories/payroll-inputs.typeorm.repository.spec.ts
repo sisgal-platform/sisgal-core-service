@@ -98,17 +98,17 @@ describe('PayrollInputsTypeOrmRepository', () => {
     );
   });
 
-  it('solo trae préstamos activos con cuotas y saldo pendientes', async () => {
+  it('trae los préstamos activos aunque su saldo sea inconsistente, para validarlos en el cálculo', async () => {
     await repository.findActiveLoans([1], '2026-09-30');
 
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(
       'loan.status = :status',
       { status: LoanStatus.ACTIVO },
     );
-    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+    expect(queryBuilder.andWhere).not.toHaveBeenCalledWith(
       'loan.pendingInstallments > 0',
     );
-    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+    expect(queryBuilder.andWhere).not.toHaveBeenCalledWith(
       'loan.outstandingBalance > 0',
     );
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(

@@ -45,7 +45,20 @@ describe('PreLiquidationService', () => {
       netPay: 1650000,
       configSnapshot: {},
       earnings: [{ conceptName: 'Salario base', amount: 1800000 }],
-      deductions: [{ conceptName: 'Deducciones legales', amount: 150000 }],
+      deductions: [
+        { conceptName: 'Deducciones legales', amount: 100000 },
+        {
+          conceptName: 'Cuota préstamo #4',
+          amount: 50000,
+          loan: {
+            loanId: 4,
+            installments: 1,
+            scheduledAmount: 50000,
+            outstandingBalance: 150000,
+            pendingInstallments: 3,
+          },
+        },
+      ],
       workedHours: [
         {
           type: 'ORDINARIA_DIURNA',
@@ -53,6 +66,8 @@ describe('PreLiquidationService', () => {
           hours: 176,
         },
       ],
+      loanInstallments: [],
+      loanObservations: [],
     });
 
     await expect(service.generate(1, period)).resolves.toMatchObject({
@@ -66,6 +81,22 @@ describe('PreLiquidationService', () => {
       totalEarnings: 1800000,
       totalDeductions: 150000,
       netPay: 1650000,
+      // La preliquidación muestra la cuota y el saldo que quedaría, sin aplicarla.
+      deductions: [
+        { conceptName: 'Deducciones legales', amount: 100000 },
+        {
+          conceptName: 'Cuota préstamo #4',
+          amount: 50000,
+          loan: {
+            loanId: 4,
+            installments: 1,
+            scheduledAmount: 50000,
+            outstandingBalance: 150000,
+            pendingInstallments: 3,
+          },
+        },
+      ],
+      observations: [],
       workedHours: [
         {
           type: 'ORDINARIA_DIURNA',
