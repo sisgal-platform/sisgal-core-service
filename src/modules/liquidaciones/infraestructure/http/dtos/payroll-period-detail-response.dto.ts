@@ -2,6 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { PayrollPeriod } from '../../../../../entities/payroll-period.model';
 import { PayrollPeriodResponseDto } from './payroll-period-response.dto';
 import { PayrollLineResponseDto } from './payroll-line-response.dto';
+import { WorkedHoursResponseDto } from './worked-hours-response.dto';
 import type { Employee } from '../../../../../entities/employee.model';
 import type { PreLiquidationRequestDto } from 'src/modules/nomina/infrastructure/http/dtos/pre-liquidation-request.dto';
 import type { PreLiquidationCalculation } from 'src/modules/nomina/application/services/nomina.service';
@@ -42,6 +43,14 @@ export class PayrollPeriodDetailResponseDto extends PayrollPeriodResponseDto {
   })
   deductions!: PayrollLineResponseDto[];
 
+  @ApiProperty({
+    description:
+      'Horas trabajadas por tipo de hora (ordinarias, dominicales y extra). Solo se informan en la preliquidación.',
+    type: WorkedHoursResponseDto,
+    isArray: true,
+  })
+  workedHours!: WorkedHoursResponseDto[];
+
   static fromEntity(
     payrollPeriod: PayrollPeriod,
   ): PayrollPeriodDetailResponseDto {
@@ -59,6 +68,7 @@ export class PayrollPeriodDetailResponseDto extends PayrollPeriodResponseDto {
     dto.deductions = lines
       .filter((line) => line.type === 'DEDUCCION')
       .map((line) => PayrollLineResponseDto.fromEntity(line));
+    dto.workedHours = [];
 
     return dto;
   }
@@ -84,6 +94,7 @@ export class PayrollPeriodDetailResponseDto extends PayrollPeriodResponseDto {
     dto.employeePosition = employee.jobPosition?.name ?? null;
     dto.earnings = calculation.earnings;
     dto.deductions = calculation.deductions;
+    dto.workedHours = calculation.workedHours;
     return dto;
   }
 }

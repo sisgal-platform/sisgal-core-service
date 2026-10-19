@@ -17,11 +17,11 @@ import {
   ApiCreatedResponse,
   ApiInternalServerErrorResponse,
   ApiNotFoundResponse,
-  ApiNotImplementedResponse,
   ApiOkResponse,
   ApiOperation,
   ApiProduces,
   ApiTags,
+  ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import { ErrorResponseDto } from 'src/shared/infraestructure/http/dtos';
 import { PayrollPeriodService } from 'src/modules/liquidaciones/application/services/payroll-period.service';
@@ -156,9 +156,9 @@ export class PayrollPeriodController {
     description: 'No se encontró el empleado indicado.',
     type: ErrorResponseDto,
   })
-  @ApiNotImplementedResponse({
+  @ApiUnprocessableEntityResponse({
     description:
-      'El cálculo integral de preliquidación aún no está implementado.',
+      'El empleado tiene información faltante o inconsistente para liquidarlo, o no existe una jornada laboral vigente.',
     type: ErrorResponseDto,
   })
   @ApiInternalServerErrorResponse({
@@ -190,9 +190,9 @@ export class PayrollPeriodController {
     description: 'No se encontró el empleado indicado.',
     type: ErrorResponseDto,
   })
-  @ApiNotImplementedResponse({
+  @ApiUnprocessableEntityResponse({
     description:
-      'El cálculo integral de preliquidación aún no está implementado.',
+      'El empleado tiene información faltante o inconsistente para liquidarlo, ya tiene una liquidación en el período o no existe una jornada laboral vigente.',
     type: ErrorResponseDto,
   })
   @ApiInternalServerErrorResponse({

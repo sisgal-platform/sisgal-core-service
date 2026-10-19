@@ -8,8 +8,10 @@ import {
   ApiNotFoundResponse,
   ApiOperation,
   ApiTags,
+  ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import { Role } from 'src/application/ports/auth/auth-user';
+import { ErrorResponseDto } from 'src/shared/infraestructure/http/dtos';
 import { Roles } from 'src/infraestructure/auth/decorators/roles.decorator';
 import { JwtAuthGuard } from 'src/infraestructure/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/infraestructure/auth/guards/roles.guard';
@@ -17,6 +19,9 @@ import { PayrollHoursService } from 'src/modules/nomina/application/services/pay
 import { ClassifiedHourResponseDto } from '../dtos/classified-hour-response.dto';
 import { ClassifyWorkedIntervalDto } from '../dtos/classify-worked-interval.dto';
 import { LegalDeductionsService } from 'src/modules/nomina/application/services/legal-deductions.service';
+import { NominaService } from 'src/modules/nomina/application/services/nomina.service';
+import { PayrollCalculationResponseDto } from '../dtos/payroll-calculation-response.dto';
+import { PreLiquidationRequestDto } from '../dtos/pre-liquidation-request.dto';
 
 @ApiTags('Nómina')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -27,7 +32,42 @@ export class NominaController {
   constructor(
     private readonly payrollHoursService: PayrollHoursService,
     private readonly legalDeductionsService: LegalDeductionsService,
+    private readonly nominaService: NominaService,
   ) {}
+
+  @Post('calcular')
+  @ApiOperation({
+    summary: 'Calcular la nómina de un período',
+    description:
+      'Calcula devengados, deducciones y neto a pagar de todos los empleados activos para el período, sin guardar la liquidación. Los empleados con información faltante o inconsistente se informan con su causa.',
+  })
+  @ApiCreatedResponse({
+    description:
+      'Cálculo realizado; el estado indica si algún empleado quedó con errores.',
+    type: PayrollCalculationResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'El rango de fechas no es válido.',
+    type: ErrorResponseDto,
+  })
+  @ApiUnprocessableEntityResponse({
+    description: 'No existe una jornada laboral vigente para el período.',
+    type: ErrorResponseDto,
+  })
+  @ApiInternalServerErrorResponse({
+    description:
+      'Falta una configuración vigente (salario mínimo, auxilio, salud o pensión) o se produjo un error interno.',
+    type: ErrorResponseDto,
+  })
+  async calculatePayroll(
+    @Body() period: PreLiquidationRequestDto,
+  ): Promise<PayrollCalculationResponseDto> {
+    const result = await this.nominaService.calculatePayroll(
+      period.periodStart,
+      period.periodEnd,
+    );
+    return PayrollCalculationResponseDto.fromResult(result);
+  }
 
   @Post('classify')
   @ApiOperation({

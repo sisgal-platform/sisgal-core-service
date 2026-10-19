@@ -9,13 +9,23 @@ import { AuthModule } from 'src/infraestructure/auth/auth.module';
 import { AsistenciaModule } from '../asistencia/asistencia.module';
 import { ATTENDANCE_RECORD_REPOSITORY_PORT } from '../asistencia/domain/ports/attendance-record.repository.port';
 import { AttendanceRecordTypeOrmRepository } from '../asistencia/infrastructure/persistence/repositories/attendance-record.typeorm.repository';
-import { AttendanceRecord, Holiday, SystemConfig } from 'src/entities';
+import {
+  AttendanceRecord,
+  DisabilityLeave,
+  Employee,
+  EmployeeLoan,
+  Holiday,
+  PayrollPeriod,
+  SystemConfig,
+} from 'src/entities';
 import { NominaService } from './application/services/nomina.service';
 import { NominaController } from './infrastructure/http/controllers/nomina.controller';
 import { LegalDeductionsService } from './application/services/legal-deductions.service';
 import { SYSTEM_CONFIG_REPOSITORY_PORT } from './domain/ports/system-config-repository.port';
 import { SystemConfigTypeOrmRepository } from './infrastructure/persistence/repositories/system-config.typeorm.repository';
 import { TransportAllowanceService } from './application/services/transport-allowance.service';
+import { PAYROLL_INPUTS_REPOSITORY_PORT } from './domain/ports/payroll-inputs.repository.port';
+import { PayrollInputsTypeOrmRepository } from './infrastructure/persistence/repositories/payroll-inputs.typeorm.repository';
 
 @Module({
   imports: [
@@ -27,6 +37,10 @@ import { TransportAllowanceService } from './application/services/transport-allo
       AttendanceRecord,
       Holiday,
       SystemConfig,
+      Employee,
+      DisabilityLeave,
+      EmployeeLoan,
+      PayrollPeriod,
     ]),
   ],
   controllers: [NominaController],
@@ -46,6 +60,10 @@ import { TransportAllowanceService } from './application/services/transport-allo
     {
       provide: ATTENDANCE_RECORD_REPOSITORY_PORT,
       useClass: AttendanceRecordTypeOrmRepository,
+    },
+    {
+      provide: PAYROLL_INPUTS_REPOSITORY_PORT,
+      useClass: PayrollInputsTypeOrmRepository,
     },
   ],
   exports: [NominaService, LegalDeductionsService, TransportAllowanceService],
