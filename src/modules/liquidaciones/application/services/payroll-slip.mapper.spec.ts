@@ -32,12 +32,12 @@ describe('payroll-slip.mapper', () => {
   });
 
   describe('toPayrollSlipData', () => {
-    it('mapea los datos de la liquidación, la sucursal vigente al período y el NIT en blanco', () => {
+    it('mapea los datos de la liquidación, la sucursal vigente al período y el NIT de la compañía', () => {
       const liquidacion = crearLiquidacion();
 
       const data = toPayrollSlipData(liquidacion);
 
-      expect(data.company).toEqual({ name: 'JS Burguer Parrilla', nit: null });
+      expect(data.company).toEqual({ name: 'JS Burguer Parrilla', nit: '900123456-6' });
       expect(data.branch).toEqual({
         name: 'Envigado',
         city: 'Envigado',
@@ -47,6 +47,25 @@ describe('payroll-slip.mapper', () => {
       expect(data.employee.documentType).toBe('CC');
       expect(data.employee.document).toBe('1020304050');
       expect(data.employee.position).toBe('Mesero');
+    });
+
+    it('deja el NIT en null cuando la sucursal no tiene compañía asociada', () => {
+      const liquidacion = crearLiquidacion({
+        employee: Object.assign(new Employee(), {
+          firstName: 'Juan',
+          lastName: 'Pérez',
+          document_type: 'CC',
+          document: '1020304050',
+          jobPosition: Object.assign(new Position(), { name: 'Mesero' }),
+          employee_branch_assig: [
+            crearAsignacion({ branch: Object.assign(new Branch(), { name: 'Envigado', city: 'Envigado', address: 'Calle 1', company: null }) }),
+          ],
+        }),
+      });
+
+      const data = toPayrollSlipData(liquidacion);
+
+      expect(data.company).toEqual({ name: '', nit: null });
     });
 
     it('separa los conceptos devengados de las deducciones', () => {
@@ -110,7 +129,7 @@ function crearSucursal(overrides: Partial<Branch> = {}): Branch {
     name: 'Envigado',
     city: 'Envigado',
     address: 'Calle 46 Sur # 42B-16, Zona 7',
-    company: Object.assign(new Company(), { name: 'JS Burguer Parrilla', nit: '' }),
+    company: Object.assign(new Company(), { name: 'JS Burguer Parrilla', nit: '900123456-6' }),
     ...overrides,
   });
 }

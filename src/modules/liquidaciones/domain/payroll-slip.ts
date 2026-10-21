@@ -5,9 +5,9 @@
 export type PayrollSlipData = {
   company: {
     name: string;
-    // El NIT real del restaurante aún no está registrado en el sistema; se
-    // deja explícitamente en blanco en vez de mostrar un dato inventado.
-    nit: null;
+    // null cuando la compañía no tiene NIT registrado (en vez de mostrar un
+    // dato inventado); si lo tiene, se muestra tal cual está en la BD.
+    nit: string | null;
   };
   branch: {
     name: string;
