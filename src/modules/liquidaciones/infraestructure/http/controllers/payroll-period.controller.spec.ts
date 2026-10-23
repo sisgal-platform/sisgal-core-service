@@ -325,7 +325,7 @@ describe('PayrollPeriodController', () => {
       expect(res.set).toHaveBeenCalledWith(
         expect.objectContaining({
           'Content-Type': 'text/csv; charset=utf-8',
-          'Content-Disposition': expect.stringContaining('liquidacion-1-2026-09-01_a_2026-09-30'),
+          'Content-Disposition': expect.stringContaining('liquidacion-Juan-Perez-2026-09-30'),
         }),
       );
     });

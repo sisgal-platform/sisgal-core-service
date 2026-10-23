@@ -39,6 +39,19 @@ import { Role } from '../../../../../application/ports/auth/auth-user';
 import { JwtAuthGuard } from '../../../../../infraestructure/auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../../../infraestructure/auth/guards/roles.guard';
 
+// Nombre base de los archivos descargables: identifica al empleado y la
+// fecha de liquidación (no el id interno, que no le dice nada al usuario).
+// Sin tildes/ñ ni caracteres que puedan dar problemas en el sistema de
+// archivos del usuario (espacios, "/", etc.).
+function buildExportFileName(employeeName: string, settlementDate: string): string {
+  const slug = employeeName
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return `liquidacion-${slug}-${settlementDate}`;
+}
+
 // Consulta de solo lectura: todos los endpoints exigen JWT de Supabase válido (JwtAuthGuard) y rol administrador (RolesGuard)
 @ApiTags('Liquidaciones')
 @ApiBearerAuth()
@@ -134,9 +147,11 @@ export class PayrollPeriodController {
     const slipData = toPayrollSlipData(payrollPeriod);
     const pdf = await this.payrollSlipPdfService.generate(slipData);
 
+    const employeeName = `${payrollPeriod.employee.firstName} ${payrollPeriod.employee.lastName}`;
+    const fileName = buildExportFileName(employeeName, String(payrollPeriod.period_end));
     res.set({
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `inline; filename="liquidacion-${id}.pdf"`,
+      'Content-Disposition': `inline; filename="${fileName}.pdf"`,
     });
     return new StreamableFile(pdf);
   }
@@ -165,10 +180,11 @@ export class PayrollPeriodController {
     const rows = toPayrollCsvRows(payrollPeriod);
     const csv = this.payrollCsvService.generate(rows);
 
-    const nombreArchivo = `liquidacion-${id}-${payrollPeriod.period_start}_a_${payrollPeriod.period_end}-contabilidad.csv`;
+    const employeeName = `${payrollPeriod.employee.firstName} ${payrollPeriod.employee.lastName}`;
+    const fileName = buildExportFileName(employeeName, String(payrollPeriod.period_end));
     res.set({
       'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': `attachment; filename="${nombreArchivo}"`,
+      'Content-Disposition': `attachment; filename="${fileName}-contabilidad.csv"`,
     });
     return new StreamableFile(csv);
   }
