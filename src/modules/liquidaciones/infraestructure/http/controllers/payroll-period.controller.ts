@@ -27,6 +27,8 @@ import { ErrorResponseDto } from 'src/shared/infraestructure/http/dtos';
 import { PayrollPeriodService } from 'src/modules/liquidaciones/application/services/payroll-period.service';
 import { PayrollSlipPdfService } from 'src/modules/liquidaciones/application/services/payroll-slip-pdf.service';
 import { toPayrollSlipData } from 'src/modules/liquidaciones/application/services/payroll-slip.mapper';
+import { PayrollCsvService } from 'src/modules/liquidaciones/application/services/payroll-csv.service';
+import { toPayrollCsvRows } from 'src/modules/liquidaciones/application/services/payroll-csv.mapper';
 import { ListPayrollPeriodQueryDto } from '../dtos/list-payroll-period-query.dto';
 import { PayrollPeriodResponseDto } from '../dtos/payroll-period-response.dto';
 import { PayrollPeriodDetailResponseDto } from '../dtos/payroll-period-detail-response.dto';
@@ -47,6 +49,7 @@ export class PayrollPeriodController {
   constructor(
     private readonly payrollPeriodService: PayrollPeriodService,
     private readonly payrollSlipPdfService: PayrollSlipPdfService,
+    private readonly payrollCsvService: PayrollCsvService,
     private readonly preLiquidationService: PreLiquidationService,
   ) {}
 
@@ -136,6 +139,38 @@ export class PayrollPeriodController {
       'Content-Disposition': `inline; filename="liquidacion-${id}.pdf"`,
     });
     return new StreamableFile(pdf);
+  }
+
+  @Get('liquidaciones/:id/csv')
+  @ApiOperation({
+    summary: 'Exportar una liquidación a CSV para integración contable',
+    description:
+      'Genera un archivo CSV con los conceptos y totales exactos de la liquidación confirmada, sin recalcularlos.',
+  })
+  @ApiProduces('text/csv')
+  @ApiOkResponse({ description: 'CSV de la liquidación generado correctamente.' })
+  @ApiNotFoundResponse({
+    description: 'No se encontró la liquidación indicada.',
+    type: ErrorResponseDto,
+  })
+  @ApiInternalServerErrorResponse({
+    description: 'Se produjo un error interno al generar el archivo.',
+    type: ErrorResponseDto,
+  })
+  async generateCsv(
+    @Param('id', ParseIntPipe) id: number,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const payrollPeriod = await this.payrollPeriodService.findById(id);
+    const rows = toPayrollCsvRows(payrollPeriod);
+    const csv = this.payrollCsvService.generate(rows);
+
+    const nombreArchivo = `liquidacion-${id}-${payrollPeriod.period_start}_a_${payrollPeriod.period_end}-contabilidad.csv`;
+    res.set({
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': `attachment; filename="${nombreArchivo}"`,
+    });
+    return new StreamableFile(csv);
   }
 
   @Post('preliquidacion/:employeeId')

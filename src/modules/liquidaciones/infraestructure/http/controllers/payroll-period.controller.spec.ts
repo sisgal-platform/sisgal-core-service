@@ -4,6 +4,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PayrollPeriodController } from './payroll-period.controller';
 import { PayrollPeriodService } from 'src/modules/liquidaciones/application/services/payroll-period.service';
 import { PayrollSlipPdfService } from 'src/modules/liquidaciones/application/services/payroll-slip-pdf.service';
+import { PayrollCsvService } from 'src/modules/liquidaciones/application/services/payroll-csv.service';
 import { PreLiquidationService } from 'src/modules/liquidaciones/application/services/pre-liquidation.service';
 import { PayrollPeriod } from 'src/entities/payroll-period.model';
 import { Employee } from 'src/entities/employee.model';
@@ -30,6 +31,9 @@ describe('PayrollPeriodController', () => {
   const payrollSlipPdfServiceMock = {
     generate: jest.fn(),
   };
+  const payrollCsvServiceMock = {
+    generate: jest.fn(),
+  };
   const preLiquidationServiceMock = { generate: jest.fn() };
 
   beforeEach(async () => {
@@ -43,6 +47,10 @@ describe('PayrollPeriodController', () => {
         {
           provide: PayrollSlipPdfService,
           useValue: payrollSlipPdfServiceMock,
+        },
+        {
+          provide: PayrollCsvService,
+          useValue: payrollCsvServiceMock,
         },
         {
           provide: PreLiquidationService,

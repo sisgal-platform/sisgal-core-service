@@ -9,6 +9,7 @@ import { PayrollPeriodService } from './application/services/payroll-period.serv
 import { PAYROLL_PERIOD_REPOSITORY_PORT } from './domain/ports/payroll-period-repository.port';
 import { PayrollPeriodTypeOrmRepository } from './infraestructure/persistence/repositories/payroll-period.typeorm.repository';
 import { PayrollSlipPdfService } from './application/services/payroll-slip-pdf.service';
+import { PayrollCsvService } from './application/services/payroll-csv.service';
 import { AuthModule } from '../../infraestructure/auth/auth.module';
 import { EmployeeModule } from '../empleados/employee.module';
 import { NominaModule } from '../nomina/nomina.module';
@@ -27,6 +28,7 @@ import { PreLiquidationService } from './application/services/pre-liquidation.se
     PayrollPeriodService,
     PreLiquidationService,
     PayrollSlipPdfService,
+    PayrollCsvService,
     {
       provide: PAYROLL_PERIOD_REPOSITORY_PORT,
       useClass: PayrollPeriodTypeOrmRepository,
