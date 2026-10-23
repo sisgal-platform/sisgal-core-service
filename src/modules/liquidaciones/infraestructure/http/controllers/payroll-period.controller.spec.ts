@@ -288,6 +288,69 @@ describe('PayrollPeriodController', () => {
     });
   });
 
+  // =========================================================
+  // GET /liquidaciones/:id/csv
+  // =========================================================
+
+  describe('generateCsv', () => {
+    function resSpy() {
+      return { set: jest.fn() } as unknown as import('express').Response;
+    }
+
+    it('debe retornar el CSV generado como un StreamableFile', async () => {
+      payrollPeriodServiceMock.findById.mockResolvedValue(crearLiquidacion());
+      payrollCsvServiceMock.generate.mockResolvedValue(Buffer.from('a,b\r\n1,2\r\n'));
+
+      const resultado = await controller.generateCsv(1, resSpy());
+
+      expect(resultado).toBeInstanceOf(StreamableFile);
+    });
+
+    it('debe consultar la liquidación por el identificador recibido', async () => {
+      payrollPeriodServiceMock.findById.mockResolvedValue(crearLiquidacion());
+      payrollCsvServiceMock.generate.mockResolvedValue(Buffer.from(''));
+
+      await controller.generateCsv(7, resSpy());
+
+      expect(payrollPeriodServiceMock.findById).toHaveBeenCalledWith(7);
+    });
+
+    it('debe establecer los encabezados de respuesta como CSV descargable con un nombre identificable', async () => {
+      payrollPeriodServiceMock.findById.mockResolvedValue(crearLiquidacion());
+      payrollCsvServiceMock.generate.mockResolvedValue(Buffer.from(''));
+      const res = resSpy();
+
+      await controller.generateCsv(1, res);
+
+      expect(res.set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': expect.stringContaining('liquidacion-1-2026-09-01_a_2026-09-30'),
+        }),
+      );
+    });
+
+    it('debe propagar los errores de la liquidación no encontrada', async () => {
+      const error = new Error('No encontrada');
+      payrollPeriodServiceMock.findById.mockRejectedValue(error);
+
+      await expect(controller.generateCsv(99, resSpy())).rejects.toBe(error);
+      expect(payrollCsvServiceMock.generate).not.toHaveBeenCalled();
+    });
+
+    it('debe propagar los errores de generación del CSV', async () => {
+      payrollPeriodServiceMock.findById.mockResolvedValue(crearLiquidacion());
+      const error = new Error('Fallo al generar el CSV');
+      // generate() es síncrono en la implementación real: simula el throw
+      // directo, no una promesa rechazada (mockRejectedValue no aplica aquí).
+      payrollCsvServiceMock.generate.mockImplementation(() => {
+        throw error;
+      });
+
+      await expect(controller.generateCsv(1, resSpy())).rejects.toBe(error);
+    });
+  });
+
   describe('generatePayrollPeriod', () => {
     it('delega la generación y persistencia de la liquidación', async () => {
       const period = {
