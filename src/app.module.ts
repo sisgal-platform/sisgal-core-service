@@ -11,6 +11,7 @@ import { AsistenciaModule } from './modules/asistencia/asistencia.module';
 import { LiquidacionesModule } from './modules/liquidaciones/liquidaciones.module';
 import { ParametrosNominaModule } from './modules/parametros-nomina/parametros-nomina.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { IntegracionModule } from './modules/integracion/integracion.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
     LiquidacionesModule,
     ParametrosNominaModule,
     DashboardModule,
+    IntegracionModule,
   ],
   controllers: [],
   providers: [],
