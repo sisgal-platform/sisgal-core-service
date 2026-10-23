@@ -27,6 +27,7 @@ import { VersionWorkRateConfigValidity1791730000000 } from '../migrations/179173
 import { VersionSystemConfigValidity1791740000000 } from '../migrations/1791740000000-VersionSystemConfigValidity';
 import { AddLoanInstallments1791810000000 } from '../migrations/1791810000000-AddLoanInstallments';
 import { AddEmployeeHireDateAndServiceBonusDays1791820000000 } from '../migrations/1791820000000-AddEmployeeHireDateAndServiceBonusDays';
+import { AddAttendanceLogMethodAndIdempotency1791830000000 } from '../migrations/1791830000000-AddAttendanceLogMethodAndIdempotency';
 import { EmployeeLoan, Holiday, LoanInstallment } from 'src/entities';
 
 export const dataSourceOptions: DataSourceOptions = {
@@ -67,6 +68,7 @@ export const dataSourceOptions: DataSourceOptions = {
     VersionSystemConfigValidity1791740000000,
     AddLoanInstallments1791810000000,
     AddEmployeeHireDateAndServiceBonusDays1791820000000,
+    AddAttendanceLogMethodAndIdempotency1791830000000,
   ],
 };
 
