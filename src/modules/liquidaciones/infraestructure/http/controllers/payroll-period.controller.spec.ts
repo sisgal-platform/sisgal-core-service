@@ -4,6 +4,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PayrollPeriodController } from './payroll-period.controller';
 import { PayrollPeriodService } from 'src/modules/liquidaciones/application/services/payroll-period.service';
 import { PayrollSlipPdfService } from 'src/modules/liquidaciones/application/services/payroll-slip-pdf.service';
+import { PayrollCsvService } from 'src/modules/liquidaciones/application/services/payroll-csv.service';
 import { PreLiquidationService } from 'src/modules/liquidaciones/application/services/pre-liquidation.service';
 import { PayrollPeriod } from 'src/entities/payroll-period.model';
 import { Employee } from 'src/entities/employee.model';
@@ -30,6 +31,9 @@ describe('PayrollPeriodController', () => {
   const payrollSlipPdfServiceMock = {
     generate: jest.fn(),
   };
+  const payrollCsvServiceMock = {
+    generate: jest.fn(),
+  };
   const preLiquidationServiceMock = { generate: jest.fn() };
 
   beforeEach(async () => {
@@ -43,6 +47,10 @@ describe('PayrollPeriodController', () => {
         {
           provide: PayrollSlipPdfService,
           useValue: payrollSlipPdfServiceMock,
+        },
+        {
+          provide: PayrollCsvService,
+          useValue: payrollCsvServiceMock,
         },
         {
           provide: PreLiquidationService,
@@ -277,6 +285,69 @@ describe('PayrollPeriodController', () => {
       payrollSlipPdfServiceMock.generate.mockRejectedValue(error);
 
       await expect(controller.generatePdf(1, resSpy())).rejects.toBe(error);
+    });
+  });
+
+  // =========================================================
+  // GET /liquidaciones/:id/csv
+  // =========================================================
+
+  describe('generateCsv', () => {
+    function resSpy() {
+      return { set: jest.fn() } as unknown as import('express').Response;
+    }
+
+    it('debe retornar el CSV generado como un StreamableFile', async () => {
+      payrollPeriodServiceMock.findById.mockResolvedValue(crearLiquidacion());
+      payrollCsvServiceMock.generate.mockResolvedValue(Buffer.from('a,b\r\n1,2\r\n'));
+
+      const resultado = await controller.generateCsv(1, resSpy());
+
+      expect(resultado).toBeInstanceOf(StreamableFile);
+    });
+
+    it('debe consultar la liquidación por el identificador recibido', async () => {
+      payrollPeriodServiceMock.findById.mockResolvedValue(crearLiquidacion());
+      payrollCsvServiceMock.generate.mockResolvedValue(Buffer.from(''));
+
+      await controller.generateCsv(7, resSpy());
+
+      expect(payrollPeriodServiceMock.findById).toHaveBeenCalledWith(7);
+    });
+
+    it('debe establecer los encabezados de respuesta como CSV descargable con un nombre identificable', async () => {
+      payrollPeriodServiceMock.findById.mockResolvedValue(crearLiquidacion());
+      payrollCsvServiceMock.generate.mockResolvedValue(Buffer.from(''));
+      const res = resSpy();
+
+      await controller.generateCsv(1, res);
+
+      expect(res.set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': expect.stringContaining('liquidacion-Juan-Perez-2026-09-30'),
+        }),
+      );
+    });
+
+    it('debe propagar los errores de la liquidación no encontrada', async () => {
+      const error = new Error('No encontrada');
+      payrollPeriodServiceMock.findById.mockRejectedValue(error);
+
+      await expect(controller.generateCsv(99, resSpy())).rejects.toBe(error);
+      expect(payrollCsvServiceMock.generate).not.toHaveBeenCalled();
+    });
+
+    it('debe propagar los errores de generación del CSV', async () => {
+      payrollPeriodServiceMock.findById.mockResolvedValue(crearLiquidacion());
+      const error = new Error('Fallo al generar el CSV');
+      // generate() es síncrono en la implementación real: simula el throw
+      // directo, no una promesa rechazada (mockRejectedValue no aplica aquí).
+      payrollCsvServiceMock.generate.mockImplementation(() => {
+        throw error;
+      });
+
+      await expect(controller.generateCsv(1, resSpy())).rejects.toBe(error);
     });
   });
 
