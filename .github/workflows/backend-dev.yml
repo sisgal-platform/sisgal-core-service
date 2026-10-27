@@ -16,8 +16,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  validate-and-deploy:
-    name: Validar y desplegar backend
+  validate:
+    name: Validar configuración y pruebas
     runs-on: ubuntu-latest
 
     steps:
@@ -35,17 +35,3 @@ jobs:
 
       - name: Ejecutar pruebas
         run: npm test -- --runInBand
-
-      - name: Construir backend
-        run: npm run build
-
-      - name: Desplegar a Render
-        if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
-        env:
-          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
-        run: |
-          if [ -z "$RENDER_DEPLOY_HOOK" ]; then
-            echo "::error::Configura RENDER_DEPLOY_HOOK en Settings > Secrets and variables > Actions."
-            exit 1
-          fi
-          curl --fail --silent --show-error --request POST "$RENDER_DEPLOY_HOOK"
