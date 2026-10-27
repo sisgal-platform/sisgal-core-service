@@ -18,9 +18,15 @@ export class AttendanceLog {
   @Column('timestamp')
   event_time!: Date;
 
+  // ENTRADA o SALIDA.
   @Column('varchar', { length: 40, nullable: false })
   event_type!: string;
 
+  // Método con el que se marcó: HUELLA o QR.
+  @Column('varchar', { length: 20, nullable: false })
+  auth_method!: string;
+
+  // Tiene índice único: un reintento con la misma clave no duplica la marcación.
   @Column('varchar', { length: 40, nullable: false })
   idempotency_key!: string;
 
@@ -28,9 +34,12 @@ export class AttendanceLog {
   @JoinColumn({ name: 'employee_id' })
   employee!: Employee;
 
-  @ManyToOne(() => BiometricDevice, (device) => device.attendanceLogs)
+  // null en las marcaciones del lector simulado, que no es un dispositivo registrado.
+  @ManyToOne(() => BiometricDevice, (device) => device.attendanceLogs, {
+    nullable: true,
+  })
   @JoinColumn({ name: 'device_id' })
-  biometricDevice!: BiometricDevice;
+  biometricDevice!: BiometricDevice | null;
 
   @OneToMany(() => AttendanceRecordLog, (attendanceRecordLog) => attendanceRecordLog.attendanceLog)
   attendanceRecordLogs!: AttendanceRecordLog[];
