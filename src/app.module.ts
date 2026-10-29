@@ -11,7 +11,6 @@ import { AsistenciaModule } from './modules/asistencia/asistencia.module';
 import { LiquidacionesModule } from './modules/liquidaciones/liquidaciones.module';
 import { ParametrosNominaModule } from './modules/parametros-nomina/parametros-nomina.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
-import { IntegracionModule } from './modules/integracion/integracion.module';
 import { AuditoriaModule } from './modules/auditoria/auditoria.module';
 
 @Module({
@@ -27,7 +26,6 @@ import { AuditoriaModule } from './modules/auditoria/auditoria.module';
     LiquidacionesModule,
     ParametrosNominaModule,
     DashboardModule,
-    IntegracionModule,
     AuditoriaModule,
   ],
   controllers: [],
