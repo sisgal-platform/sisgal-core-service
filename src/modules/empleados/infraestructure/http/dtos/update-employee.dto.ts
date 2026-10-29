@@ -70,6 +70,15 @@ export class UpdateEmployeeDto {
   branchId?: number;
 
   @ApiPropertyOptional({
+    description: 'Identificador de la nueva jornada laboral vigente asignada al empleado.',
+    example: 1,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  workdayConfigId?: number;
+
+  @ApiPropertyOptional({
     description: 'Fecha de ingreso (YYYY-MM-DD), no posterior a hoy.',
     example: '2026-02-15',
     type: String,

@@ -13,12 +13,14 @@ import { EmployeeTypeOrmRepository } from './infraestructure/persistence/reposit
 import { PositionTypeOrmRepository } from './infraestructure/persistence/repositories/position.typeorm.repository';
 import { AuthModule } from '../../infraestructure/auth/auth.module';
 import { SucursalesModule } from '../sucursales/sucursales.module';
+import { ParametrosNominaModule } from '../parametros-nomina/parametros-nomina.module';
 import { AUDIT_PORT } from '../../application/ports/audit/audit.port';
 import { WinstonAuditAdapter } from '../../infraestructure/logging/winston/winston-audit.adapter';
 
 @Module({
-    // AuthModule aporta los guards; SucursalesModule exporta el port para consultar sucursales
-    imports: [AuthModule, SucursalesModule,TypeOrmModule.forFeature([Employee, Position, AttendanceRecord, PayrollPeriod, DisabilityLeave])],
+    // AuthModule aporta los guards; SucursalesModule exporta el port para consultar sucursales;
+    // ParametrosNominaModule exporta el port de la jornada laboral que se asigna al empleado
+    imports: [AuthModule, SucursalesModule, ParametrosNominaModule,TypeOrmModule.forFeature([Employee, Position, AttendanceRecord, PayrollPeriod, DisabilityLeave])],
     controllers: [EmployeeController],
     providers: [
         EmployeeService,
