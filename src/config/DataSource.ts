@@ -28,7 +28,18 @@ import { VersionSystemConfigValidity1791740000000 } from '../migrations/17917400
 import { AddLoanInstallments1791810000000 } from '../migrations/1791810000000-AddLoanInstallments';
 import { AddEmployeeHireDateAndServiceBonusDays1791820000000 } from '../migrations/1791820000000-AddEmployeeHireDateAndServiceBonusDays';
 import { AddAttendanceLogMethodAndIdempotency1791830000000 } from '../migrations/1791830000000-AddAttendanceLogMethodAndIdempotency';
-import { EmployeeLoan, Holiday, LoanInstallment } from 'src/entities';
+import { CreateAuditoriaSchema1791840000000 } from '../migrations/1791840000000-CreateAuditoriaSchema';
+import {
+  AuditError,
+  AuditEvent,
+  AuditFieldChange,
+  AuditMetadata,
+  AuditSnapshot,
+  AuditUser,
+  EmployeeLoan,
+  Holiday,
+  LoanInstallment,
+} from 'src/entities';
 
 export const dataSourceOptions: DataSourceOptions = {
   type: 'postgres',
@@ -54,6 +65,12 @@ export const dataSourceOptions: DataSourceOptions = {
     EmployeeLoan,
     Holiday,
     LoanInstallment,
+    AuditUser,
+    AuditEvent,
+    AuditFieldChange,
+    AuditMetadata,
+    AuditError,
+    AuditSnapshot,
   ],
   ssl: { rejectUnauthorized: false },
   migrations: [
@@ -69,6 +86,7 @@ export const dataSourceOptions: DataSourceOptions = {
     AddLoanInstallments1791810000000,
     AddEmployeeHireDateAndServiceBonusDays1791820000000,
     AddAttendanceLogMethodAndIdempotency1791830000000,
+    CreateAuditoriaSchema1791840000000,
   ],
 };
 
