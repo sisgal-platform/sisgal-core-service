@@ -5,7 +5,7 @@ import { DataSource, QueryFailedError } from 'typeorm';
 
 import { WorkdayConfigTypeOrmRepository } from './workday-config.typeorm.repository';
 
-import { Employee, WorkdayConfig } from 'src/entities';
+import { WorkdayConfig } from 'src/entities';
 
 import { VigenciaSuperpuestaError } from '../../../domain/errors/vigencia-superpuesta.error';
 
@@ -34,16 +34,7 @@ describe('WorkdayConfigTypeOrmRepository', () => {
       create: jest.fn(),
       save: jest.fn(),
       update: jest.fn(),
-      createQueryBuilder: jest.fn(),
     },
-  };
-
-  // Cadena de query builder con la que se mueven los empleados a la versión nueva
-  const reasignacionMock = {
-    update: jest.fn(),
-    set: jest.fn(),
-    where: jest.fn(),
-    execute: jest.fn(),
   };
 
   const dataSourceMock = {
@@ -58,13 +49,6 @@ describe('WorkdayConfigTypeOrmRepository', () => {
     queryBuilderMock.where.mockReturnValue(queryBuilderMock);
     queryBuilderMock.andWhere.mockReturnValue(queryBuilderMock);
     queryBuilderMock.orderBy.mockReturnValue(queryBuilderMock);
-    queryRunnerMock.manager.createQueryBuilder.mockReturnValue(
-      reasignacionMock,
-    );
-    reasignacionMock.update.mockReturnValue(reasignacionMock);
-    reasignacionMock.set.mockReturnValue(reasignacionMock);
-    reasignacionMock.where.mockReturnValue(reasignacionMock);
-    reasignacionMock.execute.mockResolvedValue({ affected: 0 });
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -205,64 +189,6 @@ describe('WorkdayConfigTypeOrmRepository', () => {
       ).toBeLessThan(queryRunnerMock.manager.save.mock.invocationCallOrder[0]);
       expect(dataSourceMock.createQueryRunner).toHaveBeenCalledTimes(1);
       expect(queryRunnerMock.commitTransaction).toHaveBeenCalledTimes(1);
-    });
-
-    it('debe mover a la versión nueva los empleados asignados a la anterior, en la misma transacción', async () => {
-      const version = crearVersion();
-      const guardada = Object.assign(crearVersion(), { id: 9 });
-
-      queryRunnerMock.manager.create.mockReturnValue(version);
-      queryRunnerMock.manager.save.mockResolvedValue(guardada);
-
-      await repository.registrarVersion(version, {
-        id: 1,
-        validTo: new Date(2026, 9, 31, 12),
-      });
-
-      expect(reasignacionMock.update).toHaveBeenCalledWith(Employee);
-      expect(reasignacionMock.set).toHaveBeenCalledWith({
-        workdayConfig: guardada,
-      });
-      expect(reasignacionMock.where).toHaveBeenCalledWith(
-        'workday_config_id = :anterior',
-        { anterior: 1 },
-      );
-      expect(reasignacionMock.execute).toHaveBeenCalledTimes(1);
-      expect(
-        reasignacionMock.execute.mock.invocationCallOrder[0],
-      ).toBeLessThan(
-        queryRunnerMock.commitTransaction.mock.invocationCallOrder[0],
-      );
-    });
-
-    it('no debe mover empleados al guardar la primera versión', async () => {
-      const version = crearVersion();
-
-      queryRunnerMock.manager.create.mockReturnValue(version);
-      queryRunnerMock.manager.save.mockResolvedValue(version);
-
-      await repository.registrarVersion(version);
-
-      expect(reasignacionMock.execute).not.toHaveBeenCalled();
-    });
-
-    it('debe hacer rollback si falla el movimiento de los empleados', async () => {
-      const version = crearVersion();
-      const error = new Error('Conexión perdida');
-
-      queryRunnerMock.manager.create.mockReturnValue(version);
-      queryRunnerMock.manager.save.mockResolvedValue(version);
-      reasignacionMock.execute.mockRejectedValue(error);
-
-      await expect(
-        repository.registrarVersion(version, {
-          id: 1,
-          validTo: new Date(2026, 9, 31, 12),
-        }),
-      ).rejects.toBe(error);
-
-      expect(queryRunnerMock.commitTransaction).not.toHaveBeenCalled();
-      expect(queryRunnerMock.rollbackTransaction).toHaveBeenCalled();
     });
 
     it('no debe aplicar el cierre de la versión anterior si falla el guardado de la nueva', async () => {

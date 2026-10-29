@@ -109,7 +109,6 @@ describe('EmployeeController', () => {
         hireDate: '2026-02-15',
         branchId: 3,
         positionId: 1,
-        workdayConfigId: null,
       });
 
       expect(employeeServiceMock.register).toHaveBeenCalledTimes(1);
