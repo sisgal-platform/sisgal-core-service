@@ -58,6 +58,15 @@ export class Employee {
   @JoinColumn({ name: 'position_id' })
   jobPosition?: Position | null;
 
+  /**
+   * Jornada laboral asignada al empleado: apunta a la versión de `workday_config`
+   * vigente al asignarla. No se actualiza sola cuando se registra una versión
+   * nueva; el cálculo de nómina sigue usando la jornada vigente por fecha.
+   */
+  @ManyToOne(() => WorkdayConfig, { nullable: true })
+  @JoinColumn({ name: 'workday_config_id' })
+  workdayConfig?: WorkdayConfig | null;
+
   @Column('varchar', { length: 40, nullable: false })
   status!: string;
 
