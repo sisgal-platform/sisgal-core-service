@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, QueryFailedError, Repository } from 'typeorm';
-import { WorkdayConfig } from 'src/entities';
+import { Employee, WorkdayConfig } from 'src/entities';
 import { WorkdayConfigRepositoryPort } from '../../../domain/ports/workday-config.repository.port';
 import { VigenciaSuperpuestaError } from '../../../domain/errors/vigencia-superpuesta.error';
 import { CierreDeVersion } from '../../../domain/vigencia';
@@ -73,6 +73,17 @@ export class WorkdayConfigTypeOrmRepository implements WorkdayConfigRepositoryPo
         WorkdayConfig,
         nuevaVersion,
       );
+
+      // Los empleados asignados a la versión anterior pasan a la nueva, en la misma
+      // transacción: si algo falla no se mueve a nadie ni se guarda la versión.
+      if (cierre) {
+        await queryRunner.manager
+          .createQueryBuilder()
+          .update(Employee)
+          .set({ workdayConfig: versionCreada })
+          .where('workday_config_id = :anterior', { anterior: cierre.id })
+          .execute();
+      }
 
       await queryRunner.commitTransaction();
 
