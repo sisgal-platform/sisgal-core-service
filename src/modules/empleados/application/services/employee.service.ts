@@ -25,11 +25,6 @@ import {
   type PositionRepositoryPort,
 } from '../../domain/ports/position.repository.port';
 import { EmployeeBranchAssignment } from 'src/entities/employee-branch-assignment.model';
-import { WorkdayConfig } from 'src/entities/workday-config.model';
-import {
-  WORKDAY_CONFIG_REPOSITORY_PORT,
-  type WorkdayConfigRepositoryPort,
-} from 'src/modules/parametros-nomina/domain/ports/workday-config.repository.port';
 import { AUDIT_PORT } from 'src/application/ports/audit/audit.port';
 import type { AuditPort } from 'src/application/ports/audit/audit.port';
 import type { AuthUser } from 'src/application/ports/auth/auth-user';
@@ -46,27 +41,9 @@ export class EmployeeService {
     @Inject(POSITION_REPOSITORY_PORT)
     private readonly positionRepository: PositionRepositoryPort,
 
-    @Inject(WORKDAY_CONFIG_REPOSITORY_PORT)
-    private readonly workdayConfigRepository: WorkdayConfigRepositoryPort,
-
     @Inject(AUDIT_PORT)
     private readonly auditPort: AuditPort,
   ) {}
-
-  // Solo se puede asignar la jornada vigente hoy: las históricas o programadas se rechazan
-  private async obtenerJornadaAsignable(
-    workdayConfigId: number,
-  ): Promise<WorkdayConfig> {
-    const vigente = await this.workdayConfigRepository.findVigente(
-      getColombiaDate(new Date()),
-    );
-    if (!vigente || vigente.id !== workdayConfigId) {
-      throw new BadRequestException(
-        `La jornada laboral con identificador ${workdayConfigId} no existe o no está vigente.`,
-      );
-    }
-    return vigente;
-  }
 
   async register(dto: RegisterEmployeeDto, actor: AuthUser): Promise<Employee> {
     // Los value objects validan tipo/número de documento y salario (lanzan error de dominio si son inválidos)
@@ -113,14 +90,6 @@ export class EmployeeService {
       );
     }
 
-    // La jornada es opcional: si no se indica, se asigna la vigente (si hay una)
-    const workdayConfig =
-      dto.workdayConfigId !== undefined
-        ? await this.obtenerJornadaAsignable(dto.workdayConfigId)
-        : await this.workdayConfigRepository.findVigente(
-            getColombiaDate(new Date()),
-          );
-
     // Asignación inicial de sede: vigente (is_current) y sin fecha de fin (end_date null)
     const assignment = new EmployeeBranchAssignment();
     assignment.branch = branch;
@@ -139,7 +108,6 @@ export class EmployeeService {
     // "position" queda como copia histórica del nombre; "jobPosition" es el vínculo vivo al catálogo
     employee.position = jobPosition.name;
     employee.jobPosition = jobPosition;
-    employee.workdayConfig = workdayConfig;
     employee.status = 'ACTIVO';
     // El cascade de la entidad guarda empleado y asignación en una sola transacción
     employee.employee_branch_assig = [assignment];
@@ -230,12 +198,6 @@ export class EmployeeService {
       // "position" se mantiene sincronizado con el nombre vigente del cargo
       employee.position = jobPosition.name;
       employee.jobPosition = jobPosition;
-    }
-
-    if (dto.workdayConfigId !== undefined) {
-      employee.workdayConfig = await this.obtenerJornadaAsignable(
-        dto.workdayConfigId,
-      );
     }
 
     if (dto.branchId !== undefined) {

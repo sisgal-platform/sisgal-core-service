@@ -91,14 +91,6 @@ export class EmployeeResponseDto {
   })
   positionName!: string | null;
 
-  @ApiProperty({
-    description:
-      'Identificador de la jornada laboral asignada (versión de workday_config); null si no tiene',
-    example: 1,
-    nullable: true,
-  })
-  workdayConfigId!: number | null;
-
   static fromEntity(employee: Employee): EmployeeResponseDto {
     const dto = new EmployeeResponseDto();
     dto.id = employee.id;
@@ -116,9 +108,6 @@ export class EmployeeResponseDto {
     dto.branchName = current ? current.branch.name : null;
     dto.positionId = employee.jobPosition ? employee.jobPosition.id : null;
     dto.positionName = employee.jobPosition ? employee.jobPosition.name : null;
-    dto.workdayConfigId = employee.workdayConfig
-      ? employee.workdayConfig.id
-      : null;
     return dto;
   }
 }

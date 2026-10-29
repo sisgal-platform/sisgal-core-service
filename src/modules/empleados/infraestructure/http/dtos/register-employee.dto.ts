@@ -82,17 +82,6 @@ export class RegisterEmployeeDto {
 
   @ApiPropertyOptional({
     description:
-      'Identificador de la jornada laboral vigente que se asigna al empleado. Si se omite, se asigna la jornada vigente.',
-    example: 1,
-    minimum: 1,
-  })
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  workdayConfigId?: number;
-
-  @ApiPropertyOptional({
-    description:
       'Fecha de ingreso (YYYY-MM-DD), no posterior a hoy. Es necesaria para calcular la prima de servicios.',
     example: '2026-02-15',
     type: String,

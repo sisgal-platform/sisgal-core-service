@@ -38,7 +38,6 @@ export class EmployeeTypeOrmRepository implements EmployeeRepositoryPort {
             where: { id },
             relations: {
                 jobPosition: true,
-                workdayConfig: true,
                 employee_branch_assig: { branch: true },
             },
         });
@@ -48,7 +47,6 @@ export class EmployeeTypeOrmRepository implements EmployeeRepositoryPort {
         const queryBuilder = this.repository
             .createQueryBuilder('employee')
             .leftJoinAndSelect('employee.jobPosition', 'jobPosition')
-            .leftJoinAndSelect('employee.workdayConfig', 'workdayConfig')
             .leftJoinAndSelect(
                 'employee.employee_branch_assig',
                 'currentAssignment',
