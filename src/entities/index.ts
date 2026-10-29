@@ -17,3 +17,10 @@ export {Position} from './position.model';
 export {EmployeeLoan} from './employee_loan.model';
 export {Holiday} from './holiday.model';
 export {LoanInstallment} from './loan-installment.model';
+
+export {AuditUser} from './audit-user.model';
+export {AuditEvent} from './audit-event.model';
+export {AuditFieldChange} from './audit-field-change.model';
+export {AuditMetadata} from './audit-metadata.model';
+export {AuditError} from './audit-error.model';
+export {AuditSnapshot} from './audit-snapshot.model';
