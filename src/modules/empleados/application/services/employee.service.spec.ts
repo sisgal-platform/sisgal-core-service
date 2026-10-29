@@ -10,6 +10,7 @@ import { EmployeeService } from './employee.service';
 import { EMPLOYEE_REPOSITORY_PORT } from '../../domain/ports/employee-repository.port';
 import { BRANCH_REPOSITORY_PORT } from 'src/modules/sucursales/domain/ports/branch.repository.port';
 import { POSITION_REPOSITORY_PORT } from '../../domain/ports/position.repository.port';
+import { WORKDAY_CONFIG_REPOSITORY_PORT } from 'src/modules/parametros-nomina/domain/ports/workday-config.repository.port';
 
 import { RegisterEmployeeDto } from '../../infraestructure/http/dtos/register-employee.dto';
 import { DocumentType } from '../../domain/value-objects/document-type.enum';
@@ -25,7 +26,7 @@ import { AUDIT_PORT } from 'src/application/ports/audit/audit.port';
 import { Role } from 'src/application/ports/auth/auth-user';
 import type { AuthUser } from 'src/application/ports/auth/auth-user';
 
-import { Branch, Employee, Position } from 'src/entities';
+import { Branch, Employee, Position, WorkdayConfig } from 'src/entities';
 import { EmployeeBranchAssignment } from 'src/entities/employee-branch-assignment.model';
 
 describe('EmployeeService', () => {
@@ -57,6 +58,12 @@ describe('EmployeeService', () => {
     findById: jest.fn(),
   };
 
+  const workdayConfigRepositoryMock: {
+    findVigente: jest.Mock;
+  } = {
+    findVigente: jest.fn(),
+  };
+
   const auditPortMock: {
     log: jest.Mock;
   } = {
@@ -84,6 +91,10 @@ describe('EmployeeService', () => {
         {
           provide: POSITION_REPOSITORY_PORT,
           useValue: positionRepositoryMock,
+        },
+        {
+          provide: WORKDAY_CONFIG_REPOSITORY_PORT,
+          useValue: workdayConfigRepositoryMock,
         },
         {
           provide: AUDIT_PORT,
@@ -338,6 +349,67 @@ describe('EmployeeService', () => {
   // =========================================================
   // update
   // =========================================================
+
+  describe('jornada laboral asignada', () => {
+    const jornadaVigente = { id: 4 } as WorkdayConfig;
+
+    beforeEach(() => {
+      employeeRepositoryMock.findByDocument.mockResolvedValue(null);
+      branchRepositoryMock.findById.mockResolvedValue(crearSucursal());
+      positionRepositoryMock.findById.mockResolvedValue(crearCargo());
+      workdayConfigRepositoryMock.findVigente.mockResolvedValue(jornadaVigente);
+      employeeRepositoryMock.save.mockImplementation((empleado: Employee) =>
+        Promise.resolve(Object.assign(empleado, { id: 5 })),
+      );
+    });
+
+    it('debe asignar la jornada vigente al registrar si no se indica ninguna', async () => {
+      const resultado = await service.register(crearDto(), actor);
+
+      expect(resultado.workdayConfig).toBe(jornadaVigente);
+    });
+
+    it('debe dejar la jornada en null al registrar si no hay una vigente', async () => {
+      workdayConfigRepositoryMock.findVigente.mockResolvedValue(null);
+
+      const resultado = await service.register(crearDto(), actor);
+
+      expect(resultado.workdayConfig).toBeNull();
+    });
+
+    it('debe asignar la jornada indicada al registrar si es la vigente', async () => {
+      const resultado = await service.register(
+        crearDto({ workdayConfigId: 4 }),
+        actor,
+      );
+
+      expect(resultado.workdayConfig).toBe(jornadaVigente);
+    });
+
+    it('debe rechazar al registrar una jornada que no es la vigente', async () => {
+      await expect(
+        service.register(crearDto({ workdayConfigId: 3 }), actor),
+      ).rejects.toThrow(BadRequestException);
+      expect(employeeRepositoryMock.save).not.toHaveBeenCalled();
+    });
+
+    it('debe cambiar la jornada al editar si es la vigente', async () => {
+      employeeRepositoryMock.findById.mockResolvedValue(crearEmpleado());
+
+      const resultado = await service.update(5, { workdayConfigId: 4 }, actor);
+
+      expect(resultado.workdayConfigId).toBe(4);
+    });
+
+    it('debe rechazar al editar una jornada que no es la vigente', async () => {
+      employeeRepositoryMock.findById.mockResolvedValue(crearEmpleado());
+
+      await expect(
+        service.update(5, { workdayConfigId: 3 }, actor),
+      ).rejects.toThrow(BadRequestException);
+      expect(employeeRepositoryMock.save).not.toHaveBeenCalled();
+    });
+  });
 
   describe('update', () => {
     beforeEach(() => {
