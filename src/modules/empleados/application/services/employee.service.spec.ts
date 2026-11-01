@@ -1,3 +1,4 @@
+import { SYSTEM_CONFIG_REPOSITORY_PORT } from 'src/modules/nomina/domain/ports/system-config-repository.port';
 import {
   BadRequestException,
   ConflictException,
@@ -30,6 +31,10 @@ import { Branch, Employee, Position, WorkdayConfig } from 'src/entities';
 import { EmployeeBranchAssignment } from 'src/entities/employee-branch-assignment.model';
 
 describe('EmployeeService', () => {
+  const systemConfigRepositoryMock = {
+    getValue: jest.fn(),
+  };
+
   let service: EmployeeService;
 
   const employeeRepositoryMock: {
@@ -77,6 +82,8 @@ describe('EmployeeService', () => {
   };
 
   beforeEach(async () => {
+    systemConfigRepositoryMock.getValue.mockReset().mockResolvedValue(1_750_905);
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         EmployeeService,
@@ -95,6 +102,10 @@ describe('EmployeeService', () => {
         {
           provide: WORKDAY_CONFIG_REPOSITORY_PORT,
           useValue: workdayConfigRepositoryMock,
+        },
+        {
+          provide: SYSTEM_CONFIG_REPOSITORY_PORT,
+          useValue: systemConfigRepositoryMock,
         },
         {
           provide: AUDIT_PORT,
@@ -238,6 +249,15 @@ describe('EmployeeService', () => {
         BadRequestException,
       );
 
+      expect(employeeRepositoryMock.save).not.toHaveBeenCalled();
+    });
+
+    it('debe rechazar un salario inferior al mínimo vigente', async () => {
+      await expect(
+        service.register(crearDto({ salaryBase: 1_000_000 }), actor),
+      ).rejects.toThrow(
+        'El salario base no puede ser inferior al salario mínimo vigente',
+      );
       expect(employeeRepositoryMock.save).not.toHaveBeenCalled();
     });
 
@@ -474,6 +494,36 @@ describe('EmployeeService', () => {
       expect(resultado.firstName).toBe('Julián');
       expect(resultado.phone).toBe('3009998888');
       expect(employeeRepositoryMock.save).toHaveBeenCalledTimes(1);
+    });
+
+    it('debe rechazar un salario nuevo inferior al mínimo vigente', async () => {
+      employeeRepositoryMock.findById.mockResolvedValue(
+        Object.assign(new Employee(), { id: 5, salary_base: '1800000' }),
+      );
+
+      await expect(
+        service.update(5, { salaryBase: 1_000_000 }, actor),
+      ).rejects.toThrow(
+        'El salario base no puede ser inferior al salario mínimo vigente',
+      );
+      expect(employeeRepositoryMock.save).not.toHaveBeenCalled();
+    });
+
+    it('debe permitir editar a un empleado sin cambiarle un salario inferior al mínimo', async () => {
+      employeeRepositoryMock.findById.mockResolvedValue(
+        Object.assign(new Employee(), {
+          id: 5,
+          salary_base: '1000000',
+          firstName: 'Ana',
+          lastName: 'Ruiz',
+        }),
+      );
+      employeeRepositoryMock.save.mockImplementation(async (employee) => employee);
+
+      await service.update(5, { salaryBase: 1_000_000, phone: '3001112233' }, actor);
+
+      expect(systemConfigRepositoryMock.getValue).not.toHaveBeenCalled();
+      expect(employeeRepositoryMock.save).toHaveBeenCalled();
     });
 
     it('debe validar el salario con la misma regla que al registrar', async () => {
