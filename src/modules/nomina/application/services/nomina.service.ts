@@ -39,8 +39,10 @@ import {
   type LoanObservation,
   planLoanInstallments,
 } from '../../domain/loan-installments';
-import { formatCalendarDate } from '../../domain/payroll-days';
+import { formatCalendarDate, startOfWeek } from '../../domain/payroll-days';
 import {
+  type SemesterEarnings,
+  calculateSemesterAverageSalary,
   MISSING_HIRE_DATE_CAUSE,
   SERVICE_BONUS_DAYS_PER_YEAR_KEY,
   type ServiceBonus,
@@ -65,7 +67,10 @@ import {
   cachePayrollHoursLookups,
   cacheSystemConfigLookups,
 } from './payroll-lookup-cache';
-import { PayrollHoursService } from './payroll-hours.service';
+import {
+  PayrollHoursService,
+  type WorkedInterval,
+} from './payroll-hours.service';
 import { TransportAllowanceService } from './transport-allowance.service';
 
 export interface PreLiquidationCalculation {
@@ -123,9 +128,13 @@ interface CalculationContext {
 
 interface EmployeeInputs {
   attendanceRecords: AttendanceRecord[];
+  /** Marcaciones de la semana anteriores al período: solo cuentan para el límite semanal. */
+  previousWeekRecords: AttendanceRecord[];
   disabilityLeaves: DisabilityLeave[];
   loans: EmployeeLoan[];
   payrollPeriods: PayrollPeriod[];
+  /** Liquidaciones que se cruzan con los semestres de la prima que se paga. */
+  semesterPayrollPeriods: PayrollPeriod[];
 }
 
 type EmployeeOutcome = PayrollEmployeeResult | PayrollEmployeeError;
@@ -153,6 +162,29 @@ function toLoanInput(loan: EmployeeLoan): LoanInput {
     grantedAt: aFechaCalendario(loan.grantedAt),
     periodicity: loan.periodicity,
   };
+}
+
+function toWorkedInterval(record: AttendanceRecord): WorkedInterval {
+  return { start: record.check_in, end: record.check_out as Date };
+}
+
+// Las liquidaciones sin esta base en su copia de parámetros se cuentan con el
+// salario base: no hay forma de saber qué conceptos salariales tuvieron.
+function toSemesterEarnings(payrollPeriod: PayrollPeriod): SemesterEarnings[] {
+  const snapshot = payrollPeriod.config_snapshot as {
+    contributionBase?: unknown;
+  } | null;
+  const salaryEarnings = Number(snapshot?.contributionBase);
+
+  return snapshot?.contributionBase != null && Number.isFinite(salaryEarnings)
+    ? [
+        {
+          start: aFechaCalendario(payrollPeriod.period_start),
+          end: aFechaCalendario(payrollPeriod.period_end),
+          salaryEarnings,
+        },
+      ]
+    : [];
 }
 
 @Injectable()
@@ -229,34 +261,59 @@ export class NominaService {
 
     const context = await this.createCalculationContext(period);
     const employeeIds = employees.map((employee) => employee.id);
-    const [attendanceRecords, disabilityLeaves, loans, payrollPeriods] =
-      await Promise.all([
-        this.payrollInputsRepository.findAttendanceRecords(
-          employeeIds,
-          inicioDelDia(period.periodStart),
-          inicioDelDiaSiguiente(period.periodEnd),
-        ),
-        this.payrollInputsRepository.findDisabilityLeaves(
-          employeeIds,
-          period.periodStart,
-          period.periodEnd,
-        ),
-        this.payrollInputsRepository.findActiveLoans(
-          employeeIds,
-          period.periodEnd,
-        ),
-        this.payrollInputsRepository.findPayrollPeriods(
-          employeeIds,
-          period.periodStart,
-          period.periodEnd,
-        ),
-      ]);
+    const periodFirstInstant = inicioDelDia(period.periodStart);
+    const semesters = context.serviceBonusSemesters;
+    const [
+      attendanceRecords,
+      disabilityLeaves,
+      loans,
+      payrollPeriods,
+      semesterPayrollPeriods,
+    ] = await Promise.all([
+      // Se traen desde el lunes: el límite semanal cuenta las horas de la
+      // semana aunque hayan empezado antes del período.
+      this.payrollInputsRepository.findAttendanceRecords(
+        employeeIds,
+        inicioDelDia(startOfWeek(period.periodStart)),
+        inicioDelDiaSiguiente(period.periodEnd),
+      ),
+      this.payrollInputsRepository.findDisabilityLeaves(
+        employeeIds,
+        period.periodStart,
+        period.periodEnd,
+      ),
+      this.payrollInputsRepository.findActiveLoans(
+        employeeIds,
+        period.periodEnd,
+      ),
+      this.payrollInputsRepository.findPayrollPeriods(
+        employeeIds,
+        period.periodStart,
+        period.periodEnd,
+      ),
+      semesters.length > 0
+        ? this.payrollInputsRepository.findPayrollPeriods(
+            employeeIds,
+            semesters[0].start,
+            semesters[semesters.length - 1].end,
+          )
+        : Promise.resolve([]),
+    ]);
+    const isInPeriod = (record: AttendanceRecord) =>
+      new Date(record.check_in) >= periodFirstInstant;
 
     return Promise.all(
       employees.map((employee) =>
         this.calculateEmployee(employee, period, context, {
           attendanceRecords: attendanceRecords.filter(
-            (record) => record.employee.id === employee.id,
+            (record) =>
+              record.employee.id === employee.id && isInPeriod(record),
+          ),
+          previousWeekRecords: attendanceRecords.filter(
+            (record) =>
+              record.employee.id === employee.id &&
+              !isInPeriod(record) &&
+              record.check_out !== null,
           ),
           disabilityLeaves: disabilityLeaves.filter(
             (leave) => leave.employee.id === employee.id,
@@ -266,6 +323,9 @@ export class NominaService {
             (loan) => Number(loan.employeeId) === employee.id,
           ),
           payrollPeriods: payrollPeriods.filter(
+            (payrollPeriod) => payrollPeriod.employee.id === employee.id,
+          ),
+          semesterPayrollPeriods: semesterPayrollPeriods.filter(
             (payrollPeriod) => payrollPeriod.employee.id === employee.id,
           ),
         }),
@@ -289,7 +349,10 @@ export class NominaService {
     const liquidationDate = aDate(periodEnd);
     const workdayConfig =
       await payrollHoursRepository.findWorkdayConfig(liquidationDate);
-    const dailyWorkHours = Number(workdayConfig?.max_day_hours);
+    // El valor de la hora sale de la jornada semanal repartida en 6 días: con
+    // 42 horas son 7 horas diarias, es decir, salario / 210. El máximo diario
+    // solo define desde qué hora del día se paga como extra.
+    const dailyWorkHours = Number(workdayConfig?.max_week_hours) / 6;
 
     if (!Number.isFinite(dailyWorkHours) || dailyWorkHours <= 0) {
       throw new UnprocessableEntityException(
@@ -349,6 +412,7 @@ export class NominaService {
       context.payrollHoursService,
       employee.id,
       inputs.attendanceRecords,
+      inputs.previousWeekRecords,
     );
     const causes = [
       ...(Number.isFinite(salary) && salary > 0 ? [] : [INVALID_SALARY_CAUSE]),
@@ -433,6 +497,14 @@ export class NominaService {
         salary,
         transportAllowance.allowanceAmount,
         context,
+        [
+          ...inputs.semesterPayrollPeriods.flatMap(toSemesterEarnings),
+          {
+            start: period.periodStart,
+            end: period.periodEnd,
+            salaryEarnings: earnings.contributionBase,
+          },
+        ],
       );
       const allEarnings: PayrollLineResponseDto[] = [
         ...earnings.earnings,
@@ -505,6 +577,7 @@ export class NominaService {
     salary: number,
     transportAllowance: number,
     context: CalculationContext,
+    liquidatedEarnings: SemesterEarnings[],
   ): ServiceBonus[] {
     if (
       !employee.hire_date ||
@@ -521,7 +594,12 @@ export class NominaService {
       const bonus = calculateServiceBonus({
         semester,
         hireDate,
-        salaryBase: salary,
+        salaryBase: calculateSemesterAverageSalary({
+          semester,
+          hireDate,
+          salaryBase: salary,
+          liquidatedEarnings,
+        }),
         transportAllowance,
         daysPerYear,
       });
@@ -538,43 +616,35 @@ export class NominaService {
     payrollHoursService: PayrollHoursService,
     employeeId: number,
     records: AttendanceRecord[],
+    previousWeekRecords: AttendanceRecord[],
   ): Promise<{ segments: WorkedSegment[]; causes: string[] }> {
-    const classified = await Promise.all(
-      records.map(async (record) => {
-        const date = formatCalendarDate(getColombiaDate(record.check_in));
-
-        if (!record.check_out) {
-          return {
-            segments: [],
-            cause: `La marcación del ${date} no tiene hora de salida.`,
-          };
-        }
-
-        try {
-          return {
-            segments: await payrollHoursService.classifyWorkedInterval(
-              employeeId,
-              record.check_in,
-              record.check_out,
-            ),
-            cause: null,
-          };
-        } catch (error) {
-          if (!(error instanceof HttpException)) {
-            throw error;
-          }
-
-          return {
-            segments: [],
-            cause: `La marcación del ${date} no se pudo clasificar: ${error.message}`,
-          };
-        }
-      }),
+    const completeRecords = records.filter((record) => record.check_out);
+    const classifications = await payrollHoursService.classifyWorkedIntervals(
+      employeeId,
+      completeRecords.map(toWorkedInterval),
+      previousWeekRecords.map(toWorkedInterval),
     );
+    const classificationByRecord = new Map(
+      completeRecords.map((record, index) => [record, classifications[index]]),
+    );
+    const segments: WorkedSegment[] = [];
+    const causes: string[] = [];
 
-    return {
-      segments: classified.flatMap((item) => item.segments),
-      causes: classified.flatMap((item) => (item.cause ? [item.cause] : [])),
-    };
+    for (const record of records) {
+      const date = formatCalendarDate(getColombiaDate(record.check_in));
+      const classification = classificationByRecord.get(record);
+
+      if (!classification) {
+        causes.push(`La marcación del ${date} no tiene hora de salida.`);
+      } else if ('error' in classification) {
+        causes.push(
+          `La marcación del ${date} no se pudo clasificar: ${classification.error.message}`,
+        );
+      } else {
+        segments.push(...classification.segments);
+      }
+    }
+
+    return { segments, causes };
   }
 }

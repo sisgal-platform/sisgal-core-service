@@ -1,5 +1,5 @@
 import { roundCurrency } from './payroll-calculation';
-import { countPayrollDays } from './payroll-days';
+import { PAYROLL_DAYS_PER_MONTH, countPayrollDays } from './payroll-days';
 
 /** Parámetro versionado en `system_config`: días de salario de prima por año trabajado. */
 export const SERVICE_BONUS_DAYS_PER_YEAR_KEY = 'SERVICE_BONUS_DAYS_PER_YEAR';
@@ -21,6 +21,7 @@ export interface ServiceBonusInput {
   semester: ServiceBonusSemester;
   /** Fecha de ingreso del empleado (YYYY-MM-DD). */
   hireDate: string;
+  /** Salario promedio del semestre (ver `calculateSemesterAverageSalary`). */
   salaryBase: number;
   /** Auxilio de transporte mensual que recibe el empleado (0 si no tiene derecho). */
   transportAllowance: number;
@@ -42,6 +43,55 @@ export interface ServiceBonus {
   daysPerYear: number;
   amount: number;
   isProportional: boolean;
+}
+
+/** Devengado salarial de una liquidación: todo menos auxilio de transporte y prima. */
+export interface SemesterEarnings {
+  start: string;
+  end: string;
+  salaryEarnings: number;
+}
+
+export interface SemesterAverageSalaryInput {
+  semester: ServiceBonusSemester;
+  hireDate: string;
+  salaryBase: number;
+  /** Liquidaciones que se cruzan con el semestre, incluida la del período actual. */
+  liquidatedEarnings: SemesterEarnings[];
+}
+
+/**
+ * Salario mensual promedio del semestre: incluye horas extra y recargos. De
+ * una liquidación que cruza el semestre solo cuenta la parte proporcional, y
+ * los días que ninguna liquidación cubre se cuentan con el salario base.
+ */
+export function calculateSemesterAverageSalary(
+  input: SemesterAverageSalaryInput,
+): number {
+  const { semester, hireDate, salaryBase, liquidatedEarnings } = input;
+  const workedFrom = hireDate > semester.start ? hireDate : semester.start;
+  const workedDays = countPayrollDays(workedFrom, semester.end);
+  let coveredDays = 0;
+  let earnings = 0;
+
+  for (const liquidated of liquidatedEarnings) {
+    const from = liquidated.start > workedFrom ? liquidated.start : workedFrom;
+    const to = liquidated.end < semester.end ? liquidated.end : semester.end;
+    const days = countPayrollDays(from, to);
+
+    if (days > 0) {
+      coveredDays += days;
+      earnings +=
+        (liquidated.salaryEarnings * days) /
+        countPayrollDays(liquidated.start, liquidated.end);
+    }
+  }
+
+  const uncoveredDays = Math.max(0, workedDays - coveredDays);
+  const total =
+    earnings + (salaryBase / PAYROLL_DAYS_PER_MONTH) * uncoveredDays;
+
+  return roundCurrency((total / workedDays) * PAYROLL_DAYS_PER_MONTH);
 }
 
 export function serviceBonusConcept(semester: ServiceBonusSemester): string {
@@ -86,7 +136,7 @@ export function findServiceBonusSemesters(
 }
 
 /**
- * Prima de servicios de un semestre: (salario base + auxilio de transporte)
+ * Prima de servicios de un semestre: (salario promedio + auxilio de transporte)
  * / 30 x días de prima por año x días trabajados del semestre / 360. Con los
  * 30 días legales queda salario x días trabajados / 360. Si el empleado
  * ingresó durante el semestre, la prima es proporcional; si ingresó después,
