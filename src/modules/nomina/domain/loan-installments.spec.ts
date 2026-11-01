@@ -86,8 +86,31 @@ describe('loan-installments', () => {
     it('no descuenta cuando la periodicidad no corresponde al período', () => {
       expect(plan([loan()], '2026-09-01', '2026-09-15')).toEqual({
         installments: [],
-        observations: [],
+        observations: [
+          {
+            loanId: 1,
+            reason: 'SIN_FECHA_DE_CORTE',
+            message:
+              'El préstamo #1 no tiene cuota en este período: su próxima fecha de corte es el 30/09/2026.',
+            details: { nextCutoff: '2026-09-30' },
+          },
+        ],
       });
+    });
+
+    it('informa que un préstamo mensual no se descuenta si el período termina antes del último día', () => {
+      expect(
+        plan([loan()], '2026-10-01', '2026-10-30').observations[0].message,
+      ).toBe(
+        'El préstamo #1 no tiene cuota en este período: su próxima fecha de corte es el 31/10/2026.',
+      );
+    });
+
+    it('informa el siguiente día 15 en un préstamo quincenal', () => {
+      expect(
+        plan([loan({ periodicity: 'QUINCENAL' })], '2026-10-01', '2026-10-14')
+          .observations[0].details,
+      ).toEqual({ nextCutoff: '2026-10-15' });
     });
 
     it('no descuenta cortes anteriores al otorgamiento del préstamo', () => {

@@ -1,5 +1,6 @@
 import { LoanPeriodicity } from 'src/modules/loans/enums/loan-periodicity.enum';
 import { formatCurrency, roundCurrency } from './payroll-calculation';
+import { addCalendarDays, formatCalendarDate } from './payroll-days';
 import { loanInstallmentConcept } from './payroll-concepts';
 
 /**
@@ -42,9 +43,9 @@ export interface LoanInstallmentPlan {
 }
 
 export type LoanObservationReason =
-  'INFORMACION_INCONSISTENTE' | 'LIMITE_DEDUCCIONES';
+  'INFORMACION_INCONSISTENTE' | 'LIMITE_DEDUCCIONES' | 'SIN_FECHA_DE_CORTE';
 
-/** Cuota que no se pudo descontar, o que se descontó solo en parte. */
+/** Cuota que no se pudo descontar, se descontó solo en parte o no corresponde al período. */
 export interface LoanObservation {
   loanId: number;
   reason: LoanObservationReason;
@@ -111,6 +112,18 @@ export function listCutoffDates(
   }
 
   return dates;
+}
+
+/** Primera fecha de corte después del fin del período. */
+function findNextCutoffDate(
+  periodicity: LoanPeriodicity,
+  periodEnd: string,
+): string {
+  return listCutoffDates(
+    periodicity,
+    addCalendarDays(periodEnd, 1),
+    addCalendarDays(periodEnd, 32),
+  )[0];
 }
 
 function isPositive(value: number): boolean {
@@ -210,6 +223,17 @@ export function planLoanInstallments(
       input.periodEnd,
     );
     if (cutoffDates.length === 0) {
+      const nextCutoff = findNextCutoffDate(
+        loan.periodicity as LoanPeriodicity,
+        input.periodEnd,
+      );
+
+      observations.push({
+        loanId: loan.loanId,
+        reason: 'SIN_FECHA_DE_CORTE',
+        message: `El préstamo #${loan.loanId} no tiene cuota en este período: su próxima fecha de corte es el ${formatCalendarDate(nextCutoff)}.`,
+        details: { nextCutoff },
+      });
       continue;
     }
 
