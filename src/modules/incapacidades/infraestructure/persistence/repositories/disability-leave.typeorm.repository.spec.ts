@@ -9,6 +9,7 @@ describe('DisabilityLeaveTypeOrmRepository', () => {
     where: jest.fn(),
     andWhere: jest.fn(),
     orderBy: jest.fn(),
+    addOrderBy: jest.fn(),
     select: jest.fn(),
     addSelect: jest.fn(),
     getMany: jest.fn(),
@@ -27,6 +28,7 @@ describe('DisabilityLeaveTypeOrmRepository', () => {
     queryBuilder.where.mockReturnValue(queryBuilder);
     queryBuilder.andWhere.mockReturnValue(queryBuilder);
     queryBuilder.orderBy.mockReturnValue(queryBuilder);
+        queryBuilder.addOrderBy.mockReturnValue(queryBuilder);
     queryBuilder.select.mockReturnValue(queryBuilder);
     queryBuilder.addSelect.mockReturnValue(queryBuilder);
     disabilityLeaveRepositoryMock.createQueryBuilder.mockReturnValue(

@@ -44,7 +44,7 @@ export class WorkRateConfigService {
   async obtenerHistorial(): Promise<WorkRateConfig[]> {
     const versiones = await this.workRateConfigRepository.findAll();
 
-    return this.ordenar(versiones);
+    return this.ordenarHistorial(versiones);
   }
 
   async obtenerVigentes(fecha?: string): Promise<WorkRateConfig[]> {
@@ -206,6 +206,15 @@ export class WorkRateConfigService {
   }
 
   /** Por tipo de hora en el orden del catálogo y, dentro de cada tipo, de la versión más reciente a la más antigua. */
+  /** El historial va de la vigencia más reciente a la más antigua; en la misma fecha, en el orden de los conceptos. */
+  private ordenarHistorial(versiones: WorkRateConfig[]): WorkRateConfig[] {
+    return this.ordenar(versiones).sort((a, b) =>
+      aFechaCalendario(b.valid_from).localeCompare(
+        aFechaCalendario(a.valid_from),
+      ),
+    );
+  }
+
   private ordenar(versiones: WorkRateConfig[]): WorkRateConfig[] {
     return [...versiones].sort((a, b) => {
       const porTipo = ORDEN_TIPOS.indexOf(a.type) - ORDEN_TIPOS.indexOf(b.type);

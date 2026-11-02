@@ -23,7 +23,8 @@ export class DisabilityLeaveTypeOrmRepository implements DisabilityLeaveReposito
             .createQueryBuilder('disabilityLeave')
             .leftJoinAndSelect('disabilityLeave.employee', 'employee')
             .leftJoinAndSelect('employee.jobPosition', 'jobPosition')
-            .orderBy('disabilityLeave.start_date', 'DESC');
+            .orderBy('disabilityLeave.start_date', 'DESC')
+            .addOrderBy('disabilityLeave.id', 'DESC');
 
         if (filters.employeeId) {
             queryBuilder.andWhere('employee.id = :employeeId', { employeeId: filters.employeeId });

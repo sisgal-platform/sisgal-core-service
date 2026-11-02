@@ -287,7 +287,7 @@ describe('AttendanceTodayService', () => {
   // =========================================================
 
   describe('orden', () => {
-    it('debe listar primero los presentes por hora de entrada y luego los ausentes por nombre', async () => {
+    it('debe listar primero los presentes de la entrada más reciente a la más antigua y luego los ausentes por nombre', async () => {
       const carlos = crearEmpleado({ id: 6, firstName: 'Carlos' });
       const beatriz = crearEmpleado({ id: 7, firstName: 'Beatriz' });
 
@@ -305,8 +305,8 @@ describe('AttendanceTodayService', () => {
       const resultado = await service.consultarAsistenciaHoy();
 
       expect(resultado.data.map((e) => e.firstName)).toEqual([
-        'Luis',
         'Ana',
+        'Luis',
         'Beatriz',
         'Carlos',
       ]);

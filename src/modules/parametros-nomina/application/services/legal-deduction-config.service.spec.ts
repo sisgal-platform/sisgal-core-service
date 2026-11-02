@@ -100,7 +100,7 @@ describe('LegalDeductionConfigService', () => {
   // =========================================================
 
   describe('obtenerHistorial', () => {
-    it('debe consultar solo los descuentos legales y agruparlos, de la versión más reciente a la más antigua', async () => {
+    it('debe consultar solo los descuentos legales, de la vigencia más reciente a la más antigua', async () => {
       legalDeductionConfigRepositoryMock.findAll.mockResolvedValue([
         crearVersion({ id: 3, key: LegalDeductionType.PENSION_RATE }),
         crearVersion({

@@ -46,7 +46,7 @@ export class LegalDeductionConfigService {
     const versiones =
       await this.legalDeductionConfigRepository.findAll(CLAVES_DESCUENTOS);
 
-    return this.ordenar(versiones);
+    return this.ordenarHistorial(versiones);
   }
 
   async obtenerVigentes(fecha?: string): Promise<SystemConfig[]> {
@@ -218,6 +218,15 @@ export class LegalDeductionConfigService {
   }
 
   /** Por descuento en el orden del catálogo y, dentro de cada uno, de la versión más reciente a la más antigua. */
+  /** El historial va de la vigencia más reciente a la más antigua; en la misma fecha, en el orden de los conceptos. */
+  private ordenarHistorial(versiones: SystemConfig[]): SystemConfig[] {
+    return this.ordenar(versiones).sort((a, b) =>
+      aFechaCalendario(b.valid_from).localeCompare(
+        aFechaCalendario(a.valid_from),
+      ),
+    );
+  }
+
   private ordenar(versiones: SystemConfig[]): SystemConfig[] {
     return [...versiones].sort((a, b) => {
       const porDescuento =
