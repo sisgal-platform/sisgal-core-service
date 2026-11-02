@@ -145,16 +145,16 @@ describe('AttendanceRecordTypeOrmRepository', () => {
       ]);
     });
 
-    it('debe ordenar cronológicamente por hora de entrada', async () => {
+    it('debe ordenar de la entrada más reciente a la más antigua', async () => {
       await repository.findHistory({ pagina: 1, porPagina: 10 });
 
       expect(queryBuilderMock.orderBy).toHaveBeenCalledWith(
         'record.check_in',
-        'ASC',
+        'DESC',
       );
       expect(queryBuilderMock.addOrderBy).toHaveBeenCalledWith(
         'record.id',
-        'ASC',
+        'DESC',
       );
     });
 

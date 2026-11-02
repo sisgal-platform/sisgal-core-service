@@ -93,7 +93,7 @@ describe('WorkRateConfigTypeOrmRepository', () => {
       await expect(repository.findAll()).resolves.toBe(versiones);
 
       expect(workRateConfigRepositoryMock.find).toHaveBeenCalledWith({
-        order: { type: 'ASC', valid_from: 'DESC' },
+        order: { valid_from: 'DESC', type: 'ASC' },
       });
     });
   });

@@ -34,6 +34,24 @@ describe('loan-installments', () => {
   }
 
   describe('listCutoffDates', () => {
+    it('usa cada domingo para los préstamos semanales', () => {
+      expect(
+        listCutoffDates(LoanPeriodicity.SEMANAL, '2026-09-01', '2026-09-30'),
+      ).toEqual(['2026-09-06', '2026-09-13', '2026-09-20', '2026-09-27']);
+    });
+
+    it('incluye los domingos en los extremos del rango semanal', () => {
+      expect(
+        listCutoffDates(LoanPeriodicity.SEMANAL, '2026-09-06', '2026-09-13'),
+      ).toEqual(['2026-09-06', '2026-09-13']);
+    });
+
+    it('no da cortes semanales si el rango no incluye un domingo', () => {
+      expect(
+        listCutoffDates(LoanPeriodicity.SEMANAL, '2026-09-07', '2026-09-12'),
+      ).toEqual([]);
+    });
+
     it('usa el último día de cada mes para los préstamos mensuales', () => {
       expect(
         listCutoffDates(LoanPeriodicity.MENSUAL, '2026-01-10', '2026-03-31'),
@@ -360,7 +378,7 @@ describe('loan-installments', () => {
       ],
       [
         'con periodicidad desconocida',
-        { periodicity: 'SEMANAL' },
+        { periodicity: 'ANUAL' },
         'La periodicidad del préstamo no es válida.',
       ],
     ])('detecta un préstamo %s', (_case, overrides, cause) => {

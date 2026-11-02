@@ -97,7 +97,7 @@ describe('WorkRateConfigService', () => {
   // =========================================================
 
   describe('obtenerHistorial', () => {
-    it('debe agrupar las versiones por tipo de hora, de la más reciente a la más antigua', async () => {
+    it('debe ordenar de la vigencia más reciente a la más antigua y, en la misma fecha, por tipo de hora', async () => {
       workRateConfigRepositoryMock.findAll.mockResolvedValue([
         crearVersion({
           id: 1,
@@ -121,7 +121,7 @@ describe('WorkRateConfigService', () => {
 
       const resultado = await service.obtenerHistorial();
 
-      expect(resultado.map((version) => version.id)).toEqual([3, 4, 1, 2]);
+      expect(resultado.map((version) => version.id)).toEqual([4, 3, 1, 2]);
     });
   });
 

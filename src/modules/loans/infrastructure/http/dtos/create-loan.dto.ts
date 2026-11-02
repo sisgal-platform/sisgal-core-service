@@ -65,7 +65,7 @@ export class CreateLoanDto {
 
   @ApiPropertyOptional({
     description:
-      'Cada cuánto se descuenta una cuota: MENSUAL (el último día de cada mes) o QUINCENAL (el día 15 y el último día de cada mes). Por defecto, MENSUAL.',
+      'Cada cuánto se descuenta una cuota: MENSUAL (el último día de cada mes), QUINCENAL (el día 15 y el último día de cada mes) o SEMANAL (cada domingo). Por defecto, MENSUAL.',
     enum: LoanPeriodicity,
     example: LoanPeriodicity.MENSUAL,
   })

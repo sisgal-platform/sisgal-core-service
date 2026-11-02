@@ -1,4 +1,8 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { EmployeeLoan } from 'src/entities';
 import { CreateLoanDto } from '../../infrastructure/http/dtos/create-loan.dto';
 import { LoanPeriodicity } from '../../enums/loan-periodicity.enum';
@@ -13,6 +17,8 @@ describe('LoanService', () => {
     save: jest.fn(),
     findAll: jest.fn(),
     getIndicators: jest.fn(),
+    countInstallments: jest.fn(),
+    delete: jest.fn(),
   };
   let service: LoanService;
 
@@ -224,5 +230,140 @@ describe('LoanService', () => {
       montoTotalPrestamosActivos: 4500000,
     });
     expect(loanRepository.getIndicators).toHaveBeenCalledTimes(1);
+  });
+
+  describe('actualizar', () => {
+    const employee = {
+      id: 7,
+      firstName: 'María',
+      lastName: 'Pérez',
+      document_type: 'CC',
+      document: '123456789',
+    };
+    const storedLoan = (overrides: Partial<Record<string, unknown>> = {}) =>
+      ({
+        id: 22,
+        employee,
+        // TypeORM entrega las columnas numeric y bigint como texto.
+        employeeId: '7',
+        totalAmount: '1000.00',
+        installmentAmount: '333',
+        totalInstallments: 3,
+        pendingInstallments: 3,
+        outstandingBalance: '1000.00',
+        grantedAt: '2026-03-10',
+        periodicity: LoanPeriodicity.MENSUAL,
+        status: LoanStatus.ACTIVO,
+        ...overrides,
+      }) as unknown as EmployeeLoan;
+
+    beforeEach(() => {
+      loanRepository.save.mockImplementation(async (loan) => loan);
+    });
+
+    it('recalcula la cuota y el saldo si aún no tiene descuentos', async () => {
+      loanRepository.findById.mockResolvedValue(storedLoan());
+      loanRepository.findEmployeeById.mockResolvedValue(employee as never);
+
+      const result = await service.actualizar(22, {
+        totalAmount: 1200,
+        totalInstallments: 4,
+        grantedAt: '2026-04-01',
+        periodicity: LoanPeriodicity.SEMANAL,
+      });
+
+      expect(result).toMatchObject({
+        totalAmount: 1200,
+        installmentAmount: 300,
+        totalInstallments: 4,
+        pendingInstallments: 4,
+        outstandingBalance: 1200,
+        periodicity: LoanPeriodicity.SEMANAL,
+        hasDiscounts: false,
+      });
+    });
+
+    it('permite cambiar la periodicidad de un préstamo con descuentos', async () => {
+      loanRepository.findById.mockResolvedValue(
+        storedLoan({ pendingInstallments: 2, outstandingBalance: '667.00' }),
+      );
+
+      const result = await service.actualizar(22, {
+        employeeId: 7,
+        totalAmount: 1000,
+        totalInstallments: 3,
+        grantedAt: '2026-03-10',
+        periodicity: LoanPeriodicity.QUINCENAL,
+      });
+
+      expect(result).toMatchObject({
+        periodicity: LoanPeriodicity.QUINCENAL,
+        pendingInstallments: 2,
+        outstandingBalance: 667,
+        hasDiscounts: true,
+      });
+    });
+
+    it.each([
+      ['el monto', { totalAmount: 2000 }],
+      ['las cuotas', { totalInstallments: 5 }],
+      ['la fecha', { grantedAt: '2026-05-01' }],
+      ['el empleado', { employeeId: 8 }],
+    ])('no permite cambiar %s si ya tiene descuentos', async (_caso, dto) => {
+      loanRepository.findById.mockResolvedValue(
+        storedLoan({ pendingInstallments: 2, outstandingBalance: '667.00' }),
+      );
+
+      await expect(service.actualizar(22, dto)).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(loanRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('rechaza el cambio a un empleado que no existe', async () => {
+      loanRepository.findById.mockResolvedValue(storedLoan());
+      loanRepository.findEmployeeById.mockResolvedValue(null);
+
+      await expect(
+        service.actualizar(22, { employeeId: 99 }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('rechaza actualizar un préstamo que no existe', async () => {
+      loanRepository.findById.mockResolvedValue(null);
+
+      await expect(
+        service.actualizar(99, { totalAmount: 1 }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('eliminar', () => {
+    it('elimina un préstamo sin cuotas descontadas', async () => {
+      loanRepository.findById.mockResolvedValue({ id: 22 } as EmployeeLoan);
+      loanRepository.countInstallments.mockResolvedValue(0);
+
+      await service.eliminar(22);
+
+      expect(loanRepository.delete).toHaveBeenCalledWith(22);
+    });
+
+    it('no elimina un préstamo con cuotas descontadas', async () => {
+      loanRepository.findById.mockResolvedValue({ id: 22 } as EmployeeLoan);
+      loanRepository.countInstallments.mockResolvedValue(1);
+
+      await expect(service.eliminar(22)).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(loanRepository.delete).not.toHaveBeenCalled();
+    });
+
+    it('rechaza eliminar un préstamo que no existe', async () => {
+      loanRepository.findById.mockResolvedValue(null);
+
+      await expect(service.eliminar(99)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
   });
 });

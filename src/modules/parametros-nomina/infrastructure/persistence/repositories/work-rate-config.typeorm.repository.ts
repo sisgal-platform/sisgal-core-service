@@ -21,8 +21,8 @@ export class WorkRateConfigTypeOrmRepository implements WorkRateConfigRepository
   async findAll(): Promise<WorkRateConfig[]> {
     return this.repository.find({
       order: {
-        type: 'ASC',
         valid_from: 'DESC',
+        type: 'ASC',
       },
     });
   }

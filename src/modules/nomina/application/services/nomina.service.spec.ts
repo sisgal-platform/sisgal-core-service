@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   InternalServerErrorException,
   UnprocessableEntityException,
 } from '@nestjs/common';
@@ -27,10 +28,10 @@ describe('NominaService', () => {
     isHoliday: jest.fn(),
   };
   const payrollInputsRepository: jest.Mocked<PayrollInputsRepositoryPort> = {
-    findActiveEmployees: jest.fn(),
     findAttendanceRecords: jest.fn(),
     findDisabilityLeaves: jest.fn(),
     findActiveLoans: jest.fn(),
+    findLoansByIds: jest.fn(),
     findPayrollPeriods: jest.fn(),
   };
 
@@ -129,7 +130,6 @@ describe('NominaService', () => {
         ({ type, multiplier: multipliers[type] }) as WorkRateConfig,
     );
     payrollHoursRepository.isHoliday.mockResolvedValue(false);
-    payrollInputsRepository.findActiveEmployees.mockResolvedValue([ana, luis]);
     payrollInputsRepository.findAttendanceRecords.mockResolvedValue([
       attendance(
         10,
@@ -511,151 +511,19 @@ describe('NominaService', () => {
     });
   });
 
-  describe('calculatePayroll', () => {
-    it('calcula a todos los empleados activos con una sola consulta por fuente', async () => {
-      const result = await service.calculatePayroll('2026-09-01', '2026-09-30');
+  it('da el mismo resultado al ejecutar el cálculo dos veces', async () => {
+    const first = await service.calculatePreLiquidation(
+      ana,
+      '2026-09-01',
+      '2026-09-30',
+    );
+    const second = await service.calculatePreLiquidation(
+      ana,
+      '2026-09-01',
+      '2026-09-30',
+    );
 
-      expect(result.status).toBe('COMPLETADO');
-      expect(result.errors).toEqual([]);
-      expect(result.results.map((item) => item.employee.id)).toEqual([1, 2]);
-      expect(
-        payrollInputsRepository.findAttendanceRecords,
-      ).toHaveBeenCalledTimes(1);
-      expect(
-        payrollInputsRepository.findAttendanceRecords,
-      ).toHaveBeenCalledWith([1, 2], expect.any(Date), expect.any(Date));
-    });
-
-    it('no incluye a los empleados inactivos aunque hayan trabajado en el período', async () => {
-      const inactive = {
-        id: 6,
-        firstName: 'Diomenes',
-        lastName: 'Aristizabal',
-        salary_base: '1200000.00',
-        status: 'INACTIVO',
-      } as unknown as Employee;
-      payrollInputsRepository.findAttendanceRecords.mockResolvedValue([
-        attendance(
-          68,
-          inactive,
-          '2026-09-01T09:00:00-05:00',
-          '2026-09-01T17:00:00-05:00',
-        ),
-      ]);
-
-      const result = await service.calculatePayroll('2026-09-01', '2026-09-30');
-
-      expect(payrollInputsRepository.findActiveEmployees).toHaveBeenCalled();
-      expect(
-        [...result.results, ...result.errors].map((item) => item.employee.id),
-      ).toEqual([1, 2]);
-    });
-
-    it('consulta cada parámetro una sola vez en todo el lote', async () => {
-      payrollInputsRepository.findAttendanceRecords.mockResolvedValue([
-        attendance(
-          10,
-          ana,
-          '2026-09-07T08:00:00-05:00',
-          '2026-09-07T18:00:00-05:00',
-        ),
-        attendance(
-          11,
-          luis,
-          '2026-09-07T07:00:00-05:00',
-          '2026-09-07T17:00:00-05:00',
-        ),
-      ]);
-
-      await service.calculatePayroll('2026-09-01', '2026-09-30');
-
-      // Jornada del 30 (liquidación) y del 7; ORDINARIA_DIURNA y EXTRA_DIURNA del 7.
-      expect(payrollHoursRepository.findWorkdayConfig).toHaveBeenCalledTimes(2);
-      expect(payrollHoursRepository.findWorkRateConfig).toHaveBeenCalledTimes(
-        2,
-      );
-      expect(payrollHoursRepository.isHoliday).toHaveBeenCalledTimes(1);
-      // Salario mínimo, auxilio, salud y pensión: una vez para los dos empleados.
-      expect(systemConfigRepository.getValue).toHaveBeenCalledTimes(4);
-
-      await service.calculatePayroll('2026-09-01', '2026-09-30');
-
-      expect(payrollHoursRepository.findWorkdayConfig).toHaveBeenCalledTimes(4);
-      expect(systemConfigRepository.getValue).toHaveBeenCalledTimes(8);
-    });
-
-    it('asigna a cada empleado solo su propia información', async () => {
-      const result = await service.calculatePayroll('2026-09-01', '2026-09-30');
-      const luisResult = result.results.find((item) => item.employee.id === 2);
-
-      expect(luisResult?.calculation.earnings).toEqual([
-        { conceptName: 'Salario base', amount: 3_000_000 },
-        { conceptName: 'Auxilio de transporte', amount: 249_095 },
-      ]);
-      expect(luisResult?.calculation.deductions).toEqual([
-        { conceptName: 'Salud', amount: 120_000 },
-        { conceptName: 'Pensión', amount: 120_000 },
-      ]);
-      expect(luisResult?.calculation.workedHours).toEqual([]);
-    });
-
-    it('reporta los empleados con inconsistencias sin descartar a los demás', async () => {
-      payrollInputsRepository.findAttendanceRecords.mockResolvedValue([
-        attendance(
-          10,
-          ana,
-          '2026-09-07T08:00:00-05:00',
-          '2026-09-07T18:00:00-05:00',
-        ),
-        attendance(12, luis, '2026-09-08T08:00:00-05:00', null),
-        attendance(13, luis, '2026-09-09T08:00:00-05:00', null),
-      ]);
-
-      const result = await service.calculatePayroll('2026-09-01', '2026-09-30');
-
-      expect(result.status).toBe('CON_ERRORES');
-      expect(result.results.map((item) => item.employee.id)).toEqual([1]);
-      expect(result.errors).toEqual([
-        {
-          employee: luis,
-          causes: [
-            'La marcación del 08/09/2026 no tiene hora de salida.',
-            'La marcación del 09/09/2026 no tiene hora de salida.',
-          ],
-        },
-      ]);
-    });
-
-    it('retorna un cálculo vacío cuando no hay empleados activos', async () => {
-      payrollInputsRepository.findActiveEmployees.mockResolvedValue([]);
-
-      await expect(
-        service.calculatePayroll('2026-09-01', '2026-09-30'),
-      ).resolves.toEqual({
-        periodStart: '2026-09-01',
-        periodEnd: '2026-09-30',
-        status: 'COMPLETADO',
-        results: [],
-        errors: [],
-      });
-      expect(payrollHoursRepository.findWorkdayConfig).not.toHaveBeenCalled();
-    });
-
-    it('rechaza un período con la fecha inicial posterior a la final', async () => {
-      await expect(
-        service.calculatePayroll('2026-09-30', '2026-09-01'),
-      ).rejects.toThrow(BadRequestException);
-      expect(
-        payrollInputsRepository.findActiveEmployees,
-      ).not.toHaveBeenCalled();
-    });
-
-    it('da el mismo resultado al ejecutar el cálculo dos veces', async () => {
-      const first = await service.calculatePayroll('2026-09-01', '2026-09-30');
-      const second = await service.calculatePayroll('2026-09-01', '2026-09-30');
-
-      expect(second).toEqual(first);
-    });
+    expect(second).toEqual(first);
   });
 
   describe('horas de la semana anterior al período', () => {
@@ -868,28 +736,10 @@ describe('NominaService', () => {
       );
     });
 
-    it('identifica en el lote a los empleados sin fecha de ingreso sin descartar a los demás', async () => {
-      const result = await service.calculatePayroll(
-        june.periodStart,
-        june.periodEnd,
-      );
-
-      expect(result.status).toBe('CON_ERRORES');
-      expect(result.results.map((item) => item.employee.id)).toEqual([1]);
-      expect(result.errors).toEqual([
-        {
-          employee: luis,
-          causes: [
-            'No tiene fecha de ingreso registrada; es necesaria para calcular la prima de servicios.',
-          ],
-        },
-      ]);
-    });
-
     it('no exige la fecha de ingreso en un período que no paga prima', async () => {
-      const result = await service.calculatePayroll('2026-09-01', '2026-09-30');
-
-      expect(result.errors).toEqual([]);
+      await expect(
+        service.calculatePreLiquidation(luis, '2026-09-01', '2026-09-30'),
+      ).resolves.toBeDefined();
     });
 
     it('rechaza el cálculo cuando no hay días de prima configurados', async () => {
@@ -904,6 +754,90 @@ describe('NominaService', () => {
           'No existe un valor vigente y válido para los días de prima de servicios por año al 30/06/2026.',
         ),
       );
+    });
+
+    describe('al reemplazar una liquidación guardada', () => {
+      const replacing = {
+        id: 8,
+        employee: ana,
+        period_start: '2026-09-01',
+        period_end: '2026-09-30',
+        config_snapshot: {},
+        loan_installments: [
+          {
+            loanId: 4,
+            newBalance: '0.00',
+            remainingInstallments: 0,
+            previousBalance: '300000.00',
+            previousPendingInstallments: 3,
+          },
+        ],
+      } as unknown as PayrollPeriod;
+
+      it('ignora la liquidación reemplazada y descuenta sobre el saldo anterior, aunque ella haya saldado el préstamo', async () => {
+        payrollInputsRepository.findPayrollPeriods.mockResolvedValue([
+          replacing,
+        ]);
+        payrollInputsRepository.findActiveLoans.mockResolvedValue([]);
+        payrollInputsRepository.findLoansByIds.mockResolvedValue([
+          loanOfAna({
+            outstandingBalance: '0.00',
+            pendingInstallments: 0,
+            status: 'SALDADO',
+          }),
+        ]);
+
+        const result = await service.calculatePreLiquidation(
+          ana,
+          '2026-09-01',
+          '2026-09-30',
+          replacing,
+        );
+
+        expect(result.loanInstallments).toEqual([
+          expect.objectContaining({
+            loanId: 4,
+            previousBalance: 300_000,
+            previousPendingInstallments: 3,
+          }),
+        ]);
+      });
+
+      it('sigue rechazando un cruce con otra liquidación', async () => {
+        payrollInputsRepository.findPayrollPeriods.mockResolvedValue([
+          { ...replacing, id: 9 } as PayrollPeriod,
+        ]);
+        payrollInputsRepository.findLoansByIds.mockResolvedValue([
+          loanOfAna({ outstandingBalance: '0.00', pendingInstallments: 0 }),
+        ]);
+
+        await expect(
+          service.calculatePreLiquidation(
+            ana,
+            '2026-09-01',
+            '2026-09-30',
+            replacing,
+          ),
+        ).rejects.toThrow('Ya tiene una liquidación registrada');
+      });
+
+      it('responde con un conflicto si el préstamo tuvo movimientos posteriores', async () => {
+        payrollInputsRepository.findLoansByIds.mockResolvedValue([
+          loanOfAna({
+            outstandingBalance: '100000.00',
+            pendingInstallments: 1,
+          }),
+        ]);
+
+        await expect(
+          service.calculatePreLiquidation(
+            ana,
+            '2026-09-01',
+            '2026-09-30',
+            replacing,
+          ),
+        ).rejects.toThrow(ConflictException);
+      });
     });
   });
 });

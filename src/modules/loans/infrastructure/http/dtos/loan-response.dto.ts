@@ -2,6 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { EmployeeLoan } from 'src/entities';
 import { LoanPeriodicity } from '../../../enums/loan-periodicity.enum';
 import { LoanStatus } from '../../../enums/loan-status.enum';
+import { hasLoanDiscounts } from '../../../domain/loan-discounts';
 
 export class LoanEmployeeResponseDto {
   @ApiProperty({ example: 1 })
@@ -58,6 +59,13 @@ export class LoanResponseDto {
   @ApiProperty({ enum: LoanStatus, example: LoanStatus.ACTIVO })
   status!: LoanStatus;
 
+  @ApiProperty({
+    description:
+      'Si ya se descontó alguna cuota. En ese caso solo se puede cambiar la periodicidad.',
+    example: false,
+  })
+  hasDiscounts!: boolean;
+
   @ApiProperty({ type: String, format: 'date-time' })
   createdAt!: Date;
 
@@ -82,6 +90,7 @@ export class LoanResponseDto {
     dto.grantedAt = entity.grantedAt;
     dto.periodicity = entity.periodicity;
     dto.status = entity.status;
+    dto.hasDiscounts = hasLoanDiscounts(entity);
     dto.createdAt = entity.createdAt;
     dto.updatedAt = entity.updatedAt;
     return dto;

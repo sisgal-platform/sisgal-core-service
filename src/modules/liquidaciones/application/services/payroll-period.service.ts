@@ -8,8 +8,10 @@ import {
 import { AUDIT_PORT } from 'src/application/ports/audit/audit.port';
 import type { AuditPort } from 'src/application/ports/audit/audit.port';
 import { LoanInstallmentConflictError } from '../../domain/errors/loan-installment-conflict.error';
+import { LoanInstallmentReversalError } from '../../domain/errors/loan-installment-reversal.error';
 import * as payrollPeriodRepositoryPort from '../../domain/ports/payroll-period-repository.port';
 import { ListPayrollPeriodQueryDto } from '../../infraestructure/http/dtos/list-payroll-period-query.dto';
+import { Employee } from 'src/entities/employee.model';
 import { PayrollPeriod } from 'src/entities/payroll-period.model';
 import { PayrollLine } from 'src/entities/payroll_line.model';
 import {
@@ -46,11 +48,7 @@ export class PayrollPeriodService {
       );
     }
 
-    if (period.periodStart > period.periodEnd) {
-      throw new BadRequestException(
-        'El período inicial no puede ser posterior al período final.',
-      );
-    }
+    this.validatePeriod(period);
 
     const employee = await this.employeeRepository.findById(employeeId);
     if (!employee) {
@@ -64,23 +62,7 @@ export class PayrollPeriodService {
       period.periodStart,
       period.periodEnd,
     );
-    const payrollPeriod = Object.assign(new PayrollPeriod(), {
-      period_start: new Date(`${period.periodStart}T00:00:00.000Z`),
-      period_end: new Date(`${period.periodEnd}T00:00:00.000Z`),
-      total_earnings: calculation.totalEarnings,
-      total_deductions: calculation.totalDeductions,
-      net_pay: calculation.netPay,
-      config_snapshot: calculation.configSnapshot,
-      employee,
-      payroll_lines: [
-        ...calculation.earnings.map((line) =>
-          this.toPayrollLine(line, 'DEVENGADO'),
-        ),
-        ...calculation.deductions.map((line) =>
-          this.toPayrollLine(line, 'DEDUCCION'),
-        ),
-      ],
-    });
+    const payrollPeriod = this.toPayrollPeriod(employee, period, calculation);
 
     let savedPayrollPeriod: PayrollPeriod;
     try {
@@ -117,6 +99,81 @@ export class PayrollPeriodService {
     return PayrollPeriodDetailResponseDto.fromEntity(savedPayrollPeriod);
   }
 
+  /**
+   * Los valores de una liquidación no se escriben a mano: cada concepto sale de
+   * las reglas de nómina. Editarla es volver a calcularla, con el período
+   * indicado y los datos actuales de asistencia, novedades y parámetros.
+   */
+  async update(
+    id: number,
+    period: PreLiquidationRequestDto,
+  ): Promise<PayrollPeriodDetailResponseDto> {
+    this.validatePeriod(period);
+
+    const current = await this.findById(id);
+    const calculation = await this.nominaService.calculatePreLiquidation(
+      current.employee,
+      period.periodStart,
+      period.periodEnd,
+      current,
+    );
+    const payrollPeriod = Object.assign(
+      this.toPayrollPeriod(current.employee, period, calculation),
+      { id },
+    );
+
+    let savedPayrollPeriod: PayrollPeriod;
+    try {
+      savedPayrollPeriod = await this.payrollPeriodRepository.replace(
+        payrollPeriod,
+        calculation.loanInstallments,
+      );
+    } catch (error) {
+      throw this.toConflict(error);
+    }
+
+    this.auditPort.log({
+      action: 'PAYROLL_SETTLEMENT_UPDATED',
+      module: 'Liquidaciones',
+      resource: 'PayrollPeriod',
+      resourceId: id,
+      result: 'SUCCESS',
+      message: `Se recalculó la liquidación #${id} con el período del ${period.periodStart} al ${period.periodEnd}.`,
+      metadata: {
+        employeeId: current.employee.id,
+        previous: this.toAuditSummary(current),
+        current: this.toAuditSummary(savedPayrollPeriod),
+      },
+    });
+    this.auditLoanInstallments(savedPayrollPeriod, calculation);
+
+    return PayrollPeriodDetailResponseDto.fromEntity(savedPayrollPeriod);
+  }
+
+  /** Las cuotas de préstamos que descontó vuelven al saldo de cada préstamo. */
+  async delete(id: number): Promise<void> {
+    const payrollPeriod = await this.findById(id);
+
+    try {
+      await this.payrollPeriodRepository.delete(id);
+    } catch (error) {
+      throw this.toConflict(error);
+    }
+
+    this.auditPort.log({
+      action: 'PAYROLL_SETTLEMENT_DELETED',
+      module: 'Liquidaciones',
+      resource: 'PayrollPeriod',
+      resourceId: id,
+      result: 'SUCCESS',
+      message: `Se eliminó la liquidación #${id} de ${payrollPeriod.employee.firstName} ${payrollPeriod.employee.lastName}.`,
+      metadata: {
+        employeeId: payrollPeriod.employee.id,
+        previous: this.toAuditSummary(payrollPeriod),
+      },
+    });
+  }
+
   // Consulta de solo lectura: nunca recalcula, solo muestra lo ya liquidado
   async findAll(query: ListPayrollPeriodQueryDto): Promise<PayrollPeriod[]> {
     if (
@@ -141,6 +198,65 @@ export class PayrollPeriodService {
     }
 
     return payrollPeriod;
+  }
+
+  private validatePeriod(period: PreLiquidationRequestDto): void {
+    if (period.periodStart > period.periodEnd) {
+      throw new BadRequestException(
+        'El período inicial no puede ser posterior al período final.',
+      );
+    }
+  }
+
+  private toConflict(error: unknown): unknown {
+    return error instanceof LoanInstallmentConflictError ||
+      error instanceof LoanInstallmentReversalError
+      ? new ConflictException(error.message)
+      : error;
+  }
+
+  private toAuditSummary(
+    payrollPeriod: PayrollPeriod,
+  ): Record<string, unknown> {
+    return {
+      periodStart: payrollPeriod.period_start,
+      periodEnd: payrollPeriod.period_end,
+      totalEarnings: payrollPeriod.total_earnings,
+      totalDeductions: payrollPeriod.total_deductions,
+      netPay: payrollPeriod.net_pay,
+      loanInstallments: (payrollPeriod.loan_installments ?? []).map(
+        (installment) => ({
+          loanId: installment.loanId,
+          amount: installment.amount,
+          previousBalance: installment.previousBalance,
+          newBalance: installment.newBalance,
+        }),
+      ),
+    };
+  }
+
+  private toPayrollPeriod(
+    employee: Employee,
+    period: PreLiquidationRequestDto,
+    calculation: PreLiquidationCalculation,
+  ): PayrollPeriod {
+    return Object.assign(new PayrollPeriod(), {
+      period_start: new Date(`${period.periodStart}T00:00:00.000Z`),
+      period_end: new Date(`${period.periodEnd}T00:00:00.000Z`),
+      total_earnings: calculation.totalEarnings,
+      total_deductions: calculation.totalDeductions,
+      net_pay: calculation.netPay,
+      config_snapshot: calculation.configSnapshot,
+      employee,
+      payroll_lines: [
+        ...calculation.earnings.map((line) =>
+          this.toPayrollLine(line, 'DEVENGADO'),
+        ),
+        ...calculation.deductions.map((line) =>
+          this.toPayrollLine(line, 'DEDUCCION'),
+        ),
+      ],
+    });
   }
 
   /** Trazabilidad de cada cuota descontada y de las que no se pudieron descontar. */

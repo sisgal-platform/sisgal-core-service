@@ -9,6 +9,7 @@ import { AUDIT_PORT } from 'src/application/ports/audit/audit.port';
 import { LoanInstallment } from 'src/entities/loan-installment.model';
 import { PayrollLine } from 'src/entities/payroll_line.model';
 import { LoanInstallmentConflictError } from '../../domain/errors/loan-installment-conflict.error';
+import { LoanInstallmentReversalError } from '../../domain/errors/loan-installment-reversal.error';
 
 import { PayrollPeriodService } from './payroll-period.service';
 import { PAYROLL_PERIOD_REPOSITORY_PORT } from '../../domain/ports/payroll-period-repository.port';
@@ -25,10 +26,14 @@ describe('PayrollPeriodService', () => {
     findAll: jest.Mock;
     findById: jest.Mock;
     save: jest.Mock;
+    replace: jest.Mock;
+    delete: jest.Mock;
   } = {
     findAll: jest.fn(),
     findById: jest.fn(),
     save: jest.fn(),
+    replace: jest.fn(),
+    delete: jest.fn(),
   };
   const employeeRepositoryMock = { findById: jest.fn() };
   const nominaServiceMock = { calculatePreLiquidation: jest.fn() };
@@ -363,6 +368,133 @@ describe('PayrollPeriodService', () => {
       payrollPeriodRepositoryMock.findById.mockResolvedValue(null);
 
       await expect(service.findById(99)).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('update', () => {
+    const period: PreLiquidationRequestDto = {
+      periodStart: '2026-09-01',
+      periodEnd: '2026-09-15',
+    };
+    const employee = {
+      id: 3,
+      firstName: 'Ana',
+      lastName: 'Ruiz',
+      document_type: 'CC',
+      document: '123',
+    } as Employee;
+    const current = Object.assign(new PayrollPeriod(), { id: 8, employee });
+    const calculation = {
+      earnings: [{ conceptName: 'Salario base', amount: 900 }],
+      deductions: [{ conceptName: 'Salud', amount: 36 }],
+      totalEarnings: 900,
+      totalDeductions: 36,
+      netPay: 864,
+      configSnapshot: {},
+      loanInstallments: [],
+      loanObservations: [],
+    };
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+      payrollPeriodRepositoryMock.findById.mockResolvedValue(current);
+      nominaServiceMock.calculatePreLiquidation.mockResolvedValue(calculation);
+      payrollPeriodRepositoryMock.replace.mockImplementation(
+        async (payrollPeriod: PayrollPeriod) => payrollPeriod,
+      );
+    });
+
+    it('recalcula la liquidación y reemplaza sus valores conservando el id', async () => {
+      const result = await service.update(8, period);
+
+      expect(nominaServiceMock.calculatePreLiquidation).toHaveBeenCalledWith(
+        employee,
+        '2026-09-01',
+        '2026-09-15',
+        current,
+      );
+      expect(payrollPeriodRepositoryMock.replace).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 8,
+          net_pay: 864,
+          period_end: new Date('2026-09-15T00:00:00.000Z'),
+        }),
+        [],
+      );
+      expect(result.netPay).toBe(864);
+      expect(auditPortMock.log).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'PAYROLL_SETTLEMENT_UPDATED' }),
+      );
+    });
+
+    it('rechaza un período con el inicio posterior al fin', async () => {
+      await expect(
+        service.update(8, {
+          periodStart: '2026-09-15',
+          periodEnd: '2026-09-01',
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(payrollPeriodRepositoryMock.replace).not.toHaveBeenCalled();
+    });
+
+    it('rechaza editar una liquidación que no existe', async () => {
+      payrollPeriodRepositoryMock.findById.mockResolvedValue(null);
+
+      await expect(service.update(99, period)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('responde con un conflicto si el préstamo tiene movimientos posteriores', async () => {
+      payrollPeriodRepositoryMock.replace.mockRejectedValue(
+        new LoanInstallmentReversalError(4),
+      );
+
+      await expect(service.update(8, period)).rejects.toThrow(
+        ConflictException,
+      );
+    });
+  });
+
+  describe('delete', () => {
+    const payrollPeriod = Object.assign(new PayrollPeriod(), {
+      id: 8,
+      employee: { id: 3, firstName: 'Ana', lastName: 'Ruiz' },
+      loan_installments: [],
+    });
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+      payrollPeriodRepositoryMock.findById.mockResolvedValue(payrollPeriod);
+      payrollPeriodRepositoryMock.delete.mockResolvedValue(undefined);
+    });
+
+    it('elimina la liquidación y deja la trazabilidad', async () => {
+      await service.delete(8);
+
+      expect(payrollPeriodRepositoryMock.delete).toHaveBeenCalledWith(8);
+      expect(auditPortMock.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'PAYROLL_SETTLEMENT_DELETED',
+          resourceId: 8,
+        }),
+      );
+    });
+
+    it('rechaza eliminar una liquidación que no existe', async () => {
+      payrollPeriodRepositoryMock.findById.mockResolvedValue(null);
+
+      await expect(service.delete(99)).rejects.toThrow(NotFoundException);
+      expect(payrollPeriodRepositoryMock.delete).not.toHaveBeenCalled();
+    });
+
+    it('responde con un conflicto si el préstamo tiene movimientos posteriores', async () => {
+      payrollPeriodRepositoryMock.delete.mockRejectedValue(
+        new LoanInstallmentReversalError(4),
+      );
+
+      await expect(service.delete(8)).rejects.toThrow(ConflictException);
+      expect(auditPortMock.log).not.toHaveBeenCalled();
     });
   });
 });

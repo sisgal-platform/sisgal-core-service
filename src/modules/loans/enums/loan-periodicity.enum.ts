@@ -8,4 +8,6 @@ export enum LoanPeriodicity {
   MENSUAL = 'MENSUAL',
   /** Cortes el día 15 y el último día de cada mes. */
   QUINCENAL = 'QUINCENAL',
+  /** Corte cada domingo, el último día de la semana laboral (lunes a domingo). */
+  SEMANAL = 'SEMANAL',
 }

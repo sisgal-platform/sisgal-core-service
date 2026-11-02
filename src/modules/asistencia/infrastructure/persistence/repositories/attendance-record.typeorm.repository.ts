@@ -48,8 +48,8 @@ export class AttendanceRecordTypeOrmRepository implements AttendanceRecordReposi
     // Las relaciones son de muchos a uno, así que no multiplican filas y la
     // paginación puede resolverse en la misma consulta con LIMIT/OFFSET.
     const [records, total] = await query
-      .orderBy('record.check_in', 'ASC')
-      .addOrderBy('record.id', 'ASC')
+      .orderBy('record.check_in', 'DESC')
+      .addOrderBy('record.id', 'DESC')
       .offset((filters.pagina - 1) * filters.porPagina)
       .limit(filters.porPagina)
       .getManyAndCount();

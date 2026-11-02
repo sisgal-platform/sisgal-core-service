@@ -105,13 +105,13 @@ export class AttendanceTodayService {
     return primeraEntrada;
   }
 
-  /** Primero los presentes por hora de entrada; después los ausentes por nombre. */
+  /** Primero los presentes, de la entrada más reciente a la más antigua; después los ausentes por nombre. */
   private compararEmpleados(
     a: AttendanceTodayEmployeeDto,
     b: AttendanceTodayEmployeeDto,
   ): number {
     if (a.checkIn && b.checkIn) {
-      return a.checkIn.getTime() - b.checkIn.getTime();
+      return b.checkIn.getTime() - a.checkIn.getTime();
     }
 
     if (a.checkIn) return -1;

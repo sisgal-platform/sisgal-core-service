@@ -26,8 +26,8 @@ export class LegalDeductionConfigTypeOrmRepository implements LegalDeductionConf
     return this.repository.find({
       where: { key: In(keys) },
       order: {
-        key: 'ASC',
         valid_from: 'DESC',
+        key: 'ASC',
       },
     });
   }

@@ -26,4 +26,20 @@ export interface PayrollPeriodRepositoryPort {
     payrollPeriod: PayrollPeriod,
     loanInstallments?: LoanInstallmentPlan[],
   ): Promise<PayrollPeriod>;
+  /**
+   * Reemplaza los valores de una liquidación guardada, en una transacción:
+   * devuelve a los préstamos lo descontado, borra sus conceptos y guarda los
+   * nuevos. Lanza `LoanInstallmentReversalError` si un préstamo tuvo movimientos
+   * posteriores y `LoanInstallmentConflictError` si cambió desde el cálculo.
+   */
+  replace(
+    payrollPeriod: PayrollPeriod,
+    loanInstallments: LoanInstallmentPlan[],
+  ): Promise<PayrollPeriod>;
+  /**
+   * Elimina la liquidación con sus conceptos y devuelve a los préstamos lo
+   * descontado, en una transacción. Lanza `LoanInstallmentReversalError` si un
+   * préstamo tuvo movimientos posteriores.
+   */
+  delete(payrollPeriodId: number): Promise<void>;
 }

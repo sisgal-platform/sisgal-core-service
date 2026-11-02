@@ -55,7 +55,7 @@ export class EmployeeTypeOrmRepository implements EmployeeRepositoryPort {
                 'currentAssignment.is_current = true',
             )
             .leftJoinAndSelect('currentAssignment.branch', 'branch')
-            .orderBy('employee.id', 'ASC');
+            .orderBy('employee.id', 'DESC');
 
         if (filters.search) {
             queryBuilder.andWhere(

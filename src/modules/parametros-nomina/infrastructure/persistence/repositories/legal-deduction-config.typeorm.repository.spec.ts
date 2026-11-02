@@ -96,7 +96,7 @@ describe('LegalDeductionConfigTypeOrmRepository', () => {
 
       expect(systemConfigRepositoryMock.find).toHaveBeenCalledWith({
         where: { key: In(CLAVES) },
-        order: { key: 'ASC', valid_from: 'DESC' },
+        order: { valid_from: 'DESC', key: 'ASC' },
       });
     });
 

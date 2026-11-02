@@ -78,15 +78,36 @@ function toCalendarDate(year: number, month: number, day: number): string {
   return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
+/** Domingos (YYYY-MM-DD) entre `from` y `to`, ambos incluidos. */
+function listSundays(from: string, to: string): string[] {
+  const dates: string[] = [];
+  const daysToSunday = (7 - new Date(`${from}T00:00:00.000Z`).getUTCDay()) % 7;
+
+  for (
+    let date = addCalendarDays(from, daysToSunday);
+    date <= to;
+    date = addCalendarDays(date, 7)
+  ) {
+    dates.push(date);
+  }
+
+  return dates;
+}
+
 /**
  * Fechas de corte (YYYY-MM-DD) entre `from` y `to`, ambas incluidas: el
  * último día de cada mes y, si el préstamo es quincenal, también el día 15.
+ * Si es semanal, cada domingo.
  */
 export function listCutoffDates(
   periodicity: LoanPeriodicity,
   from: string,
   to: string,
 ): string[] {
+  if (periodicity === LoanPeriodicity.SEMANAL) {
+    return listSundays(from, to);
+  }
+
   const dates: string[] = [];
   const [toYear, toMonth] = to.split('-').map(Number);
   let [year, month] = from.split('-').map(Number);

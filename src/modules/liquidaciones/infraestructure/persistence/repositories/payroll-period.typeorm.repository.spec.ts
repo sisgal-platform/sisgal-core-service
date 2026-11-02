@@ -7,12 +7,14 @@ import { LoanInstallmentConflictError } from 'src/modules/liquidaciones/domain/e
 import { LoanStatus } from 'src/modules/loans/enums/loan-status.enum';
 import type { LoanInstallmentPlan } from 'src/modules/nomina/domain/loan-installments';
 import { PayrollPeriodTypeOrmRepository } from './payroll-period.typeorm.repository';
+import { LoanInstallmentReversalError } from 'src/modules/liquidaciones/domain/errors/loan-installment-reversal.error';
 
 describe('PayrollPeriodTypeOrmRepository', () => {
   const queryBuilder = {
     leftJoinAndSelect: jest.fn(),
     andWhere: jest.fn(),
     orderBy: jest.fn(),
+    addOrderBy: jest.fn(),
     getMany: jest.fn(),
   };
   const lockQueryBuilder = {
@@ -24,6 +26,8 @@ describe('PayrollPeriodTypeOrmRepository', () => {
     getRepository: jest.fn(),
     save: jest.fn(),
     update: jest.fn(),
+    find: jest.fn(),
+    delete: jest.fn(),
   };
   const payrollPeriodRepositoryMock = {
     createQueryBuilder: jest.fn(),
@@ -43,6 +47,7 @@ describe('PayrollPeriodTypeOrmRepository', () => {
     queryBuilder.leftJoinAndSelect.mockReturnValue(queryBuilder);
     queryBuilder.andWhere.mockReturnValue(queryBuilder);
     queryBuilder.orderBy.mockReturnValue(queryBuilder);
+    queryBuilder.addOrderBy.mockReturnValue(queryBuilder);
     payrollPeriodRepositoryMock.createQueryBuilder.mockReturnValue(
       queryBuilder,
     );
@@ -276,6 +281,77 @@ describe('PayrollPeriodTypeOrmRepository', () => {
         expect(entityManager.save).not.toHaveBeenCalled();
         expect(entityManager.update).not.toHaveBeenCalled();
       });
+    });
+  });
+
+  describe('revertir una liquidación', () => {
+    const installment = {
+      loanId: 4,
+      newBalance: '500.00',
+      remainingInstallments: 2,
+      previousBalance: '1000.00',
+      previousPendingInstallments: 3,
+    };
+
+    beforeEach(() => {
+      entityManager.getRepository.mockReturnValue({
+        createQueryBuilder: () => lockQueryBuilder,
+      });
+      entityManager.find.mockResolvedValue([installment]);
+      lockQueryBuilder.getMany.mockResolvedValue([
+        { id: 4, outstandingBalance: '500.00', pendingInstallments: 2 },
+      ]);
+    });
+
+    it('elimina la liquidación y devuelve el saldo al préstamo', async () => {
+      await repository.delete(8);
+
+      expect(lockQueryBuilder.setLock).toHaveBeenCalledWith(
+        'pessimistic_write',
+      );
+      expect(entityManager.update).toHaveBeenCalledWith(
+        expect.anything(),
+        { id: 4 },
+        {
+          outstandingBalance: '1000.00',
+          pendingInstallments: 3,
+          status: 'ACTIVO',
+        },
+      );
+      expect(entityManager.delete).toHaveBeenCalledTimes(3);
+    });
+
+    it('no elimina si el préstamo tuvo movimientos posteriores', async () => {
+      lockQueryBuilder.getMany.mockResolvedValue([
+        { id: 4, outstandingBalance: '250.00', pendingInstallments: 1 },
+      ]);
+
+      await expect(repository.delete(8)).rejects.toBeInstanceOf(
+        LoanInstallmentReversalError,
+      );
+      expect(entityManager.delete).not.toHaveBeenCalled();
+    });
+
+    it('elimina una liquidación sin préstamos sin bloquear ninguno', async () => {
+      entityManager.find.mockResolvedValue([]);
+
+      await repository.delete(8);
+
+      expect(lockQueryBuilder.setLock).not.toHaveBeenCalled();
+      expect(entityManager.update).not.toHaveBeenCalled();
+      expect(entityManager.delete).toHaveBeenCalledTimes(2);
+    });
+
+    it('reemplaza los valores sin descontar cuotas si el nuevo cálculo no las tiene', async () => {
+      const payrollPeriod = Object.assign(new PayrollPeriod(), { id: 8 });
+      entityManager.save.mockResolvedValue(payrollPeriod);
+
+      await expect(repository.replace(payrollPeriod, [])).resolves.toBe(
+        payrollPeriod,
+      );
+
+      expect(entityManager.update).toHaveBeenCalledTimes(1);
+      expect(entityManager.save).toHaveBeenCalledWith(payrollPeriod);
     });
   });
 });

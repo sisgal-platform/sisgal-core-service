@@ -1,5 +1,5 @@
 import { Repository } from 'typeorm';
-import { Employee, EmployeeLoan } from 'src/entities';
+import { Employee, EmployeeLoan, LoanInstallment } from 'src/entities';
 import { LoanStatus } from '../../../enums/loan-status.enum';
 import { LoanTypeOrmRepository } from './loan.typeorm.repository';
 
@@ -19,10 +19,12 @@ describe('LoanTypeOrmRepository', () => {
   const employeeLoanRepository = {
     createQueryBuilder: jest.fn(),
     save: jest.fn(),
+    delete: jest.fn(),
   };
   const employeeRepository = {
     findOneBy: jest.fn(),
   };
+  const installmentRepository = { countBy: jest.fn() };
   let repository: LoanTypeOrmRepository;
 
   beforeEach(() => {
@@ -38,6 +40,7 @@ describe('LoanTypeOrmRepository', () => {
     repository = new LoanTypeOrmRepository(
       employeeLoanRepository as unknown as Repository<EmployeeLoan>,
       employeeRepository as unknown as Repository<Employee>,
+      installmentRepository as unknown as Repository<LoanInstallment>,
     );
   });
 
@@ -143,5 +146,19 @@ describe('LoanTypeOrmRepository', () => {
       cantidadPrestamosActivos: 0,
       montoTotalPrestamosActivos: 0,
     });
+  });
+
+  it('cuenta las cuotas descontadas de un préstamo', async () => {
+    installmentRepository.countBy.mockResolvedValue(2);
+
+    await expect(repository.countInstallments(22)).resolves.toBe(2);
+
+    expect(installmentRepository.countBy).toHaveBeenCalledWith({ loanId: 22 });
+  });
+
+  it('elimina el préstamo por su identificador', async () => {
+    await repository.delete(22);
+
+    expect(employeeLoanRepository.delete).toHaveBeenCalledWith({ id: 22 });
   });
 });

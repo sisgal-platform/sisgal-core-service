@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Employee, EmployeeLoan } from 'src/entities';
+import { Employee, EmployeeLoan, LoanInstallment } from 'src/entities';
 import {
   LoanFilters,
   LoanIndicators,
@@ -16,6 +16,8 @@ export class LoanTypeOrmRepository implements LoanRepositoryPort {
     private readonly repository: Repository<EmployeeLoan>,
     @InjectRepository(Employee)
     private readonly employeeRepository: Repository<Employee>,
+    @InjectRepository(LoanInstallment)
+    private readonly installmentRepository: Repository<LoanInstallment>,
   ) {}
 
   findEmployeeById(employeeId: number): Promise<Employee | null> {
@@ -24,6 +26,14 @@ export class LoanTypeOrmRepository implements LoanRepositoryPort {
 
   save(loan: EmployeeLoan): Promise<EmployeeLoan> {
     return this.repository.save(loan);
+  }
+
+  countInstallments(loanId: number): Promise<number> {
+    return this.installmentRepository.countBy({ loanId });
+  }
+
+  async delete(loanId: number): Promise<void> {
+    await this.repository.delete({ id: loanId });
   }
 
   findById(loanId: number): Promise<EmployeeLoan | null> {

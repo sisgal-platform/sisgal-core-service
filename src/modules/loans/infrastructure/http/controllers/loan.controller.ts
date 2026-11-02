@@ -1,9 +1,13 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseIntPipe,
+  Patch,
   Post,
   Query,
   UseGuards,
@@ -11,8 +15,10 @@ import {
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiConflictResponse,
   ApiCreatedResponse,
   ApiInternalServerErrorResponse,
+  ApiNoContentResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
@@ -28,6 +34,7 @@ import { CreateLoanDto } from '../dtos/create-loan.dto';
 import { LoanIndicatorsResponseDto } from '../dtos/loan-indicators-response.dto';
 import { LoanQueryDto } from '../dtos/loan-query.dto';
 import { LoanResponseDto } from '../dtos/loan-response.dto';
+import { UpdateLoanDto } from '../dtos/update-loan.dto';
 
 @ApiTags('Préstamos')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -106,6 +113,68 @@ export class LoanController {
     @Param('id', ParseIntPipe) id: number,
   ): Promise<LoanResponseDto> {
     return this.loanService.obtenerPorId(id);
+  }
+
+  @Patch(':id')
+  @ApiOperation({
+    summary: 'Actualizar préstamo',
+    description:
+      'Antes del primer descuento permite corregir todos los datos y recalcula la cuota y el saldo. Después solo permite cambiar la periodicidad.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Identificador del préstamo',
+    example: 1,
+    type: Number,
+  })
+  @ApiOkResponse({
+    description: 'Préstamo actualizado correctamente.',
+    type: LoanResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'Los datos del préstamo proporcionados no son válidos.',
+  })
+  @ApiNotFoundResponse({
+    description: 'No se encontró el préstamo o el empleado indicado.',
+  })
+  @ApiConflictResponse({
+    description: 'El préstamo ya tiene cuotas descontadas.',
+  })
+  @ApiInternalServerErrorResponse({
+    description: 'Se produjo un error interno al actualizar el préstamo.',
+  })
+  actualizar(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateLoanDto,
+  ): Promise<LoanResponseDto> {
+    return this.loanService.actualizar(id, dto);
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Eliminar préstamo',
+    description:
+      'Elimina un préstamo que no tenga cuotas descontadas en liquidaciones.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Identificador del préstamo',
+    example: 1,
+    type: Number,
+  })
+  @ApiNoContentResponse({ description: 'Préstamo eliminado correctamente.' })
+  @ApiNotFoundResponse({
+    description: 'No se encontró el préstamo indicado.',
+  })
+  @ApiConflictResponse({
+    description: 'El préstamo tiene cuotas descontadas en liquidaciones.',
+  })
+  @ApiInternalServerErrorResponse({
+    description: 'Se produjo un error interno al eliminar el préstamo.',
+  })
+  eliminar(@Param('id', ParseIntPipe) id: number): Promise<void> {
+    return this.loanService.eliminar(id);
   }
 
   @Get()
