@@ -16,6 +16,7 @@ import {
 import { AUDIT_PORT } from 'src/application/ports/audit/audit.port';
 import type { AuditPort } from 'src/application/ports/audit/audit.port';
 import type { AuthUser } from 'src/application/ports/auth/auth-user';
+import { aDate } from 'src/modules/parametros-nomina/domain/vigencia';
 
 @Injectable()
 export class DisabilityLeaveService {
@@ -77,8 +78,8 @@ export class DisabilityLeaveService {
     disabilityLeave.employee = employee;
     disabilityLeave.type = dto.type;
     disabilityLeave.other_type_description = dto.otherTypeDescription ?? null;
-    disabilityLeave.start_date = startDate;
-    disabilityLeave.end_date = endDate;
+    disabilityLeave.start_date = aDate(dto.startDate.slice(0, 10));
+    disabilityLeave.end_date = aDate(dto.endDate.slice(0, 10));
     disabilityLeave.total_days = totalDays;
     // La repartición entre empresa y EPS la calculará la integración con nómina
     disabilityLeave.employee_days = 0;

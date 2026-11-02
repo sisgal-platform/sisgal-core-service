@@ -6,6 +6,7 @@ import { PayrollLine } from 'src/entities/payroll_line.model';
 import { EmployeeBranchAssignment } from 'src/entities/employee-branch-assignment.model';
 import { Branch } from 'src/entities/branch.model';
 import { Company } from 'src/entities/company.model';
+import { getColombiaDate } from 'src/shared/common/utils/colombia-date.util';
 import { findBranchAssignmentAt, toPayrollSlipData } from './payroll-slip.mapper';
 
 describe('payroll-slip.mapper', () => {
@@ -170,3 +171,13 @@ function crearLiquidacion(overrides: Partial<PayrollPeriod> = {}): PayrollPeriod
     ...overrides,
   });
 }
+
+describe('fechas del comprobante', () => {
+  it('conserva el día del período al mostrarlo en hora de Colombia', () => {
+    const { period } = toPayrollSlipData(crearLiquidacion());
+
+    expect(getColombiaDate(period.start)).toBe('2026-09-01');
+    expect(getColombiaDate(period.end)).toBe('2026-09-30');
+    expect(getColombiaDate(period.settlementDate)).toBe('2026-09-30');
+  });
+});

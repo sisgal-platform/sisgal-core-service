@@ -15,6 +15,7 @@ import { DisabilityType } from '../../domain/value-objects/disability-type.enum'
 import { RegisterDisabilityLeaveDto } from '../../infraestructure/http/dtos/register-disability-leave.dto';
 import { Employee } from 'src/entities/employee.model';
 import { DisabilityLeave } from 'src/entities/disability_leave.model';
+import { aFechaCalendario } from 'src/modules/parametros-nomina/domain/vigencia';
 
 describe('DisabilityLeaveService', () => {
   let service: DisabilityLeaveService;
@@ -102,6 +103,12 @@ describe('DisabilityLeaveService', () => {
       expect(resultado.employee_days).toBe(0);
       expect(resultado.eps_days).toBe(0);
       expect(disabilityLeaveRepositoryMock.save).toHaveBeenCalledTimes(1);
+      // TypeORM guarda las columnas `date` con el día local de la fecha.
+      const [saved] = disabilityLeaveRepositoryMock.save.mock.calls[0] as [
+        DisabilityLeave,
+      ];
+      expect(aFechaCalendario(saved.start_date)).toBe('2026-09-10');
+      expect(aFechaCalendario(saved.end_date)).toBe('2026-09-15');
     });
 
     it('debe calcular un solo día cuando inicio y fin son la misma fecha', async () => {

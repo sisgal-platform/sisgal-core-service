@@ -24,6 +24,7 @@ import {
 } from 'src/modules/nomina/application/services/nomina.service';
 import { formatCurrency } from 'src/modules/nomina/domain/payroll-calculation';
 import { PreLiquidationRequestDto } from 'src/modules/nomina/infrastructure/http/dtos/pre-liquidation-request.dto';
+import { aDate } from 'src/modules/parametros-nomina/domain/vigencia';
 import { PayrollPeriodDetailResponseDto } from '../../infraestructure/http/dtos/payroll-period-detail-response.dto';
 
 @Injectable()
@@ -241,8 +242,8 @@ export class PayrollPeriodService {
     calculation: PreLiquidationCalculation,
   ): PayrollPeriod {
     return Object.assign(new PayrollPeriod(), {
-      period_start: new Date(`${period.periodStart}T00:00:00.000Z`),
-      period_end: new Date(`${period.periodEnd}T00:00:00.000Z`),
+      period_start: aDate(period.periodStart),
+      period_end: aDate(period.periodEnd),
       total_earnings: calculation.totalEarnings,
       total_deductions: calculation.totalDeductions,
       net_pay: calculation.netPay,

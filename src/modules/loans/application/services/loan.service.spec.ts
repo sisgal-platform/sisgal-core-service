@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { EmployeeLoan } from 'src/entities';
+import { aFechaCalendario } from 'src/modules/parametros-nomina/domain/vigencia';
 import { CreateLoanDto } from '../../infrastructure/http/dtos/create-loan.dto';
 import { LoanPeriodicity } from '../../enums/loan-periodicity.enum';
 import { LoanStatus } from '../../enums/loan-status.enum';
@@ -62,11 +63,14 @@ describe('LoanService', () => {
           totalInstallments: 3,
           pendingInstallments: 3,
           outstandingBalance: 1000,
-          grantedAt: new Date('2026-03-10T00:00:00.000Z'),
           periodicity: LoanPeriodicity.MENSUAL,
           status: LoanStatus.ACTIVO,
         }),
       );
+      // TypeORM guarda las columnas `date` con el día local de la fecha.
+      expect(
+        aFechaCalendario(loanRepository.save.mock.calls[0][0].grantedAt),
+      ).toBe('2026-03-10');
       expect(result).toMatchObject({
         id: 22,
         employee: { id: 7, documentType: 'CC' },
@@ -281,6 +285,9 @@ describe('LoanService', () => {
         periodicity: LoanPeriodicity.SEMANAL,
         hasDiscounts: false,
       });
+      expect(
+        aFechaCalendario(loanRepository.save.mock.calls[0][0].grantedAt),
+      ).toBe('2026-04-01');
     });
 
     it('permite cambiar la periodicidad de un préstamo con descuentos', async () => {

@@ -2,6 +2,7 @@ import { UnprocessableEntityException } from '@nestjs/common';
 import { PayrollPeriod } from 'src/entities/payroll-period.model';
 import { EmployeeBranchAssignment } from 'src/entities/employee-branch-assignment.model';
 import { PayrollSlipData } from 'src/modules/liquidaciones/domain/payroll-slip';
+import { aDate } from 'src/modules/parametros-nomina/domain/vigencia';
 
 // Las columnas 'date' de TypeORM llegan como string ('YYYY-MM-DD'), no como
 // Date, aunque la entidad las tipe como Date. Se normalizan a string para
@@ -65,9 +66,9 @@ export function toPayrollSlipData(payrollPeriod: PayrollPeriod): PayrollSlipData
       position: employee.jobPosition?.name ?? null,
     },
     period: {
-      start: new Date(payrollPeriod.period_start),
-      end: new Date(payrollPeriod.period_end),
-      settlementDate: new Date(payrollPeriod.period_end),
+      start: aDate(toIsoDate(payrollPeriod.period_start)),
+      end: aDate(toIsoDate(payrollPeriod.period_end)),
+      settlementDate: aDate(toIsoDate(payrollPeriod.period_end)),
     },
     earnings: lines
       .filter((line) => line.type === 'DEVENGADO')

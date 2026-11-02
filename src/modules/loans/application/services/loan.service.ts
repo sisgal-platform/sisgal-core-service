@@ -6,7 +6,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Employee, EmployeeLoan } from 'src/entities';
-import { aFechaCalendario } from 'src/modules/parametros-nomina/domain/vigencia';
+import {
+  aDate,
+  aFechaCalendario,
+} from 'src/modules/parametros-nomina/domain/vigencia';
 import { LOAN_REPOSITORY_PORT } from '../../domain/ports/loan.repository.port';
 import type {
   LoanFilters,
@@ -44,7 +47,7 @@ export class LoanService {
     loan.totalInstallments = dto.totalInstallments;
     loan.pendingInstallments = dto.totalInstallments;
     loan.outstandingBalance = dto.totalAmount;
-    loan.grantedAt = new Date(`${dto.grantedAt}T00:00:00.000Z`);
+    loan.grantedAt = aDate(dto.grantedAt);
     loan.periodicity = dto.periodicity ?? LoanPeriodicity.MENSUAL;
     loan.status = LoanStatus.ACTIVO;
 
@@ -90,7 +93,7 @@ export class LoanService {
       loan.totalInstallments = totalInstallments;
       loan.pendingInstallments = totalInstallments;
       loan.outstandingBalance = totalAmount;
-      loan.grantedAt = new Date(`${grantedAt}T00:00:00.000Z`);
+      loan.grantedAt = aDate(grantedAt);
     }
 
     loan.periodicity = dto.periodicity ?? loan.periodicity;
