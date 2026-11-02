@@ -101,6 +101,7 @@
     "moduleNameMapper": {
       "^src/(.*)$": "<rootDir>/$1"
     },
+    "globalSetup": "<rootDir>/../test/jest.timezone.cjs",
     "testEnvironment": "node"
   }
 }

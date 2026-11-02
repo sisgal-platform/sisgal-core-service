@@ -18,6 +18,7 @@ import { EMPLOYEE_REPOSITORY_PORT } from 'src/modules/empleados/domain/ports/emp
 import { NominaService } from 'src/modules/nomina/application/services/nomina.service';
 import { PreLiquidationRequestDto } from 'src/modules/nomina/infrastructure/http/dtos/pre-liquidation-request.dto';
 import { Employee } from 'src/entities/employee.model';
+import { aFechaCalendario } from 'src/modules/parametros-nomina/domain/vigencia';
 
 describe('PayrollPeriodService', () => {
   let service: PayrollPeriodService;
@@ -417,10 +418,15 @@ describe('PayrollPeriodService', () => {
         expect.objectContaining({
           id: 8,
           net_pay: 864,
-          period_end: new Date('2026-09-15T00:00:00.000Z'),
         }),
         [],
       );
+      // TypeORM guarda las columnas `date` con el día local de la fecha.
+      const [saved] = payrollPeriodRepositoryMock.replace.mock.calls[0] as [
+        PayrollPeriod,
+      ];
+      expect(aFechaCalendario(saved.period_start)).toBe('2026-09-01');
+      expect(aFechaCalendario(saved.period_end)).toBe('2026-09-15');
       expect(result.netPay).toBe(864);
       expect(auditPortMock.log).toHaveBeenCalledWith(
         expect.objectContaining({ action: 'PAYROLL_SETTLEMENT_UPDATED' }),
