@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { DisabilityLeave } from 'src/entities/disability_leave.model';
+import { PayrollPeriod } from 'src/entities/payroll-period.model';
 import { DisabilityLeaveController } from './infraestructure/http/controllers/disability-leave.controller';
 import { DisabilityLeaveService } from './application/services/disability-leave.service';
 import { DISABILITY_LEAVE_REPOSITORY_PORT } from './domain/ports/disability-leave-repository.port';
@@ -12,7 +13,7 @@ import { WinstonAuditAdapter } from '../../infraestructure/logging/winston/winst
 
 @Module({
     // AuthModule aporta los guards; EmployeeModule exporta el port para validar empleados
-    imports: [AuthModule, EmployeeModule, TypeOrmModule.forFeature([DisabilityLeave])],
+    imports: [AuthModule, EmployeeModule, TypeOrmModule.forFeature([DisabilityLeave, PayrollPeriod])],
     controllers: [DisabilityLeaveController],
     providers: [
         DisabilityLeaveService,

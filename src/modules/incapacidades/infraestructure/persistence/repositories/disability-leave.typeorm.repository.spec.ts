@@ -1,5 +1,6 @@
 import { Repository } from 'typeorm';
 import { DisabilityLeave } from 'src/entities/disability_leave.model';
+import { PayrollPeriod } from 'src/entities/payroll-period.model';
 import { DisabilityLeaveTypeOrmRepository } from './disability-leave.typeorm.repository';
 
 describe('DisabilityLeaveTypeOrmRepository', () => {
@@ -18,7 +19,10 @@ describe('DisabilityLeaveTypeOrmRepository', () => {
   const disabilityLeaveRepositoryMock = {
     save: jest.fn(),
     createQueryBuilder: jest.fn(),
+    findOne: jest.fn(),
+    delete: jest.fn(),
   };
+  const payrollPeriodRepositoryMock = { createQueryBuilder: jest.fn() };
   let repository: DisabilityLeaveTypeOrmRepository;
 
   beforeEach(() => {
@@ -37,6 +41,7 @@ describe('DisabilityLeaveTypeOrmRepository', () => {
 
     repository = new DisabilityLeaveTypeOrmRepository(
       disabilityLeaveRepositoryMock as unknown as Repository<DisabilityLeave>,
+      payrollPeriodRepositoryMock as unknown as Repository<PayrollPeriod>,
     );
   });
 
@@ -148,5 +153,50 @@ describe('DisabilityLeaveTypeOrmRepository', () => {
         ['disabilityLeave.end_date >= :startDate', { startDate: '2026-09-04' }],
       ]);
     });
+  });
+
+  it('excluye el registro indicado al buscar cruces', async () => {
+    queryBuilder.getMany.mockResolvedValue([]);
+
+    await repository.findOverlapping(3, '2026-09-10', '2026-09-15', 5);
+
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      'disabilityLeave.id <> :excludedId',
+      { excludedId: 5 },
+    );
+  });
+
+  it('busca las liquidaciones del empleado que se cruzan con el rango', async () => {
+    payrollPeriodRepositoryMock.createQueryBuilder.mockReturnValue(queryBuilder);
+    queryBuilder.getMany.mockResolvedValue([]);
+
+    await repository.findOverlappingPayrollPeriods(
+      3,
+      '2026-09-10',
+      '2026-09-15',
+    );
+
+    expect(queryBuilder.where).toHaveBeenCalledWith('employee.id = :employeeId', {
+      employeeId: 3,
+    });
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      'payrollPeriod.period_start <= :endDate',
+      { endDate: '2026-09-15' },
+    );
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      'payrollPeriod.period_end >= :startDate',
+      { startDate: '2026-09-10' },
+    );
+  });
+
+  it('consulta por id con el empleado y su cargo, y elimina por id', async () => {
+    await repository.findById(5);
+    await repository.delete(5);
+
+    expect(disabilityLeaveRepositoryMock.findOne).toHaveBeenCalledWith({
+      where: { id: 5 },
+      relations: { employee: { jobPosition: true } },
+    });
+    expect(disabilityLeaveRepositoryMock.delete).toHaveBeenCalledWith({ id: 5 });
   });
 });
