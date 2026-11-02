@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   HttpException,
   Inject,
   Injectable,
@@ -89,24 +88,14 @@ export interface PreLiquidationCalculation {
   configSnapshot: Record<string, unknown>;
 }
 
-export interface PayrollEmployeeResult {
+interface PayrollEmployeeResult {
   employee: Employee;
   calculation: PreLiquidationCalculation;
 }
 
-export interface PayrollEmployeeError {
+interface PayrollEmployeeError {
   employee: Employee;
   causes: string[];
-}
-
-export type PayrollCalculationStatus = 'COMPLETADO' | 'CON_ERRORES';
-
-export interface PayrollCalculationResult {
-  periodStart: string;
-  periodEnd: string;
-  status: PayrollCalculationStatus;
-  results: PayrollEmployeeResult[];
-  errors: PayrollEmployeeError[];
 }
 
 interface PayrollRange {
@@ -217,40 +206,6 @@ export class NominaService {
     return outcome.calculation;
   }
 
-  /**
-   * Calcula la nómina del período para todos los empleados activos, sin
-   * guardarla. Los empleados con información faltante o inconsistente quedan
-   * en `errors` con sus causas, nunca con un resultado parcial.
-   */
-  async calculatePayroll(
-    periodStart: string,
-    periodEnd: string,
-  ): Promise<PayrollCalculationResult> {
-    if (periodStart > periodEnd) {
-      throw new BadRequestException(
-        'El período inicial no puede ser posterior al período final.',
-      );
-    }
-
-    const employees = await this.payrollInputsRepository.findActiveEmployees();
-    const outcomes = await this.calculateEmployees(employees, {
-      periodStart,
-      periodEnd,
-    });
-    const errors = outcomes.filter(isEmployeeError);
-
-    return {
-      periodStart,
-      periodEnd,
-      status: errors.length > 0 ? 'CON_ERRORES' : 'COMPLETADO',
-      results: outcomes.filter(
-        (outcome): outcome is PayrollEmployeeResult =>
-          !isEmployeeError(outcome),
-      ),
-      errors,
-    };
-  }
-
   private async calculateEmployees(
     employees: Employee[],
     period: PayrollRange,
@@ -337,7 +292,7 @@ export class NominaService {
    * Los parámetros se toman a la fecha de liquidación (el último día del
    * período). Los servicios de horas, deducciones legales y auxilio se crean
    * para este cálculo sobre repositorios con caché, para consultar cada
-   * parámetro una sola vez en todo el lote y no una vez por empleado.
+   * parámetro una sola vez por cálculo.
    */
   private async createCalculationContext({
     periodStart,

@@ -2,7 +2,6 @@ import { Repository } from 'typeorm';
 import {
   AttendanceRecord,
   DisabilityLeave,
-  Employee,
   EmployeeLoan,
   PayrollPeriod,
 } from 'src/entities';
@@ -18,7 +17,6 @@ describe('PayrollInputsTypeOrmRepository', () => {
     addOrderBy: jest.fn(),
     getMany: jest.fn(),
   };
-  const employeeRepository = { find: jest.fn() };
   const queryRepository = () => ({
     createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
   });
@@ -28,7 +26,6 @@ describe('PayrollInputsTypeOrmRepository', () => {
   const payrollPeriodRepository = queryRepository();
 
   const repository = new PayrollInputsTypeOrmRepository(
-    employeeRepository as unknown as Repository<Employee>,
     attendanceRecordRepository as unknown as Repository<AttendanceRecord>,
     disabilityLeaveRepository as unknown as Repository<DisabilityLeave>,
     loanRepository as unknown as Repository<EmployeeLoan>,
@@ -47,18 +44,6 @@ describe('PayrollInputsTypeOrmRepository', () => {
       method.mockReturnValue(queryBuilder);
     }
     queryBuilder.getMany.mockResolvedValue([]);
-  });
-
-  it('consulta solo los empleados activos con su cargo', async () => {
-    employeeRepository.find.mockResolvedValue([]);
-
-    await repository.findActiveEmployees();
-
-    expect(employeeRepository.find).toHaveBeenCalledWith({
-      where: { status: 'ACTIVO' },
-      relations: { jobPosition: true },
-      order: { id: 'ASC' },
-    });
   });
 
   it('filtra las marcaciones por empleados y por la entrada en [from, to)', async () => {

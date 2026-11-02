@@ -5,7 +5,6 @@ import { Repository } from 'typeorm';
 import {
   AttendanceRecord,
   DisabilityLeave,
-  Employee,
   EmployeeLoan,
   PayrollPeriod,
 } from 'src/entities';
@@ -15,9 +14,6 @@ import { PayrollInputsRepositoryPort } from '../../../domain/ports/payroll-input
 @Injectable()
 export class PayrollInputsTypeOrmRepository implements PayrollInputsRepositoryPort {
   constructor(
-    @InjectRepository(Employee)
-    private readonly employeeRepository: Repository<Employee>,
-
     @InjectRepository(AttendanceRecord)
     private readonly attendanceRecordRepository: Repository<AttendanceRecord>,
 
@@ -30,16 +26,6 @@ export class PayrollInputsTypeOrmRepository implements PayrollInputsRepositoryPo
     @InjectRepository(PayrollPeriod)
     private readonly payrollPeriodRepository: Repository<PayrollPeriod>,
   ) {}
-
-  // Los empleados inactivos no se liquidan, aunque tengan marcaciones o
-  // incapacidades en el período.
-  findActiveEmployees(): Promise<Employee[]> {
-    return this.employeeRepository.find({
-      where: { status: 'ACTIVO' },
-      relations: { jobPosition: true },
-      order: { id: 'ASC' },
-    });
-  }
 
   async findAttendanceRecords(
     employeeIds: number[],
