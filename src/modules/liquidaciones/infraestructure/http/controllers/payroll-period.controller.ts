@@ -1,10 +1,14 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseIntPipe,
   Post,
+  Put,
   Query,
   Res,
   StreamableFile,
@@ -14,8 +18,10 @@ import type { Response } from 'express';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiConflictResponse,
   ApiCreatedResponse,
   ApiInternalServerErrorResponse,
+  ApiNoContentResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
@@ -52,7 +58,7 @@ function buildExportFileName(employeeName: string, settlementDate: string): stri
   return `liquidacion-${slug}-${settlementDate}`;
 }
 
-// Consulta de solo lectura: todos los endpoints exigen JWT de Supabase válido (JwtAuthGuard) y rol administrador (RolesGuard)
+// Todos los endpoints exigen JWT de Supabase válido (JwtAuthGuard) y rol administrador (RolesGuard)
 @ApiTags('Liquidaciones')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -187,6 +193,105 @@ export class PayrollPeriodController {
       'Content-Disposition': `attachment; filename="${fileName}-contabilidad.csv"`,
     });
     return new StreamableFile(csv);
+  }
+
+  @Post('liquidaciones/:id/preliquidacion')
+  @ApiOperation({
+    summary: 'Previsualizar la edición de una liquidación',
+    description:
+      'Recalcula la liquidación con el período indicado y los datos actuales, sin guardar ningún cambio.',
+  })
+  @ApiCreatedResponse({
+    description: 'Vista previa generada correctamente.',
+    type: PayrollPeriodDetailResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'El rango de fechas no es válido.',
+    type: ErrorResponseDto,
+  })
+  @ApiNotFoundResponse({
+    description: 'No se encontró la liquidación indicada.',
+    type: ErrorResponseDto,
+  })
+  @ApiConflictResponse({
+    description:
+      'Un préstamo descontado en la liquidación tiene descuentos posteriores.',
+    type: ErrorResponseDto,
+  })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'El empleado tiene información faltante o inconsistente, o ya tiene otra liquidación en el período.',
+    type: ErrorResponseDto,
+  })
+  async previewUpdate(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() period: PreLiquidationRequestDto,
+  ): Promise<PayrollPeriodDetailResponseDto> {
+    return this.preLiquidationService.generateForUpdate(id, period);
+  }
+
+  @Put('liquidaciones/:id')
+  @ApiOperation({
+    summary: 'Editar una liquidación',
+    description:
+      'Recalcula la liquidación con el período indicado y los datos actuales, y reemplaza sus valores y conceptos. Los préstamos recuperan lo descontado antes del nuevo cálculo.',
+  })
+  @ApiOkResponse({
+    description: 'Liquidación actualizada correctamente.',
+    type: PayrollPeriodDetailResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'El rango de fechas no es válido.',
+    type: ErrorResponseDto,
+  })
+  @ApiNotFoundResponse({
+    description: 'No se encontró la liquidación indicada.',
+    type: ErrorResponseDto,
+  })
+  @ApiConflictResponse({
+    description:
+      'Un préstamo descontado en la liquidación tiene descuentos posteriores o cambió durante el cálculo.',
+    type: ErrorResponseDto,
+  })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'El empleado tiene información faltante o inconsistente, o ya tiene otra liquidación en el período.',
+    type: ErrorResponseDto,
+  })
+  @ApiInternalServerErrorResponse({
+    description: 'Se produjo un error interno al actualizar la liquidación.',
+    type: ErrorResponseDto,
+  })
+  async update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() period: PreLiquidationRequestDto,
+  ): Promise<PayrollPeriodDetailResponseDto> {
+    return this.payrollPeriodService.update(id, period);
+  }
+
+  @Delete('liquidaciones/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Eliminar una liquidación',
+    description:
+      'Elimina la liquidación con sus conceptos y devuelve a los préstamos las cuotas que descontó.',
+  })
+  @ApiNoContentResponse({ description: 'Liquidación eliminada correctamente.' })
+  @ApiNotFoundResponse({
+    description: 'No se encontró la liquidación indicada.',
+    type: ErrorResponseDto,
+  })
+  @ApiConflictResponse({
+    description:
+      'Un préstamo descontado en la liquidación tiene descuentos posteriores.',
+    type: ErrorResponseDto,
+  })
+  @ApiInternalServerErrorResponse({
+    description: 'Se produjo un error interno al eliminar la liquidación.',
+    type: ErrorResponseDto,
+  })
+  async delete(@Param('id', ParseIntPipe) id: number): Promise<void> {
+    await this.payrollPeriodService.delete(id);
   }
 
   @Post('preliquidacion/:employeeId')

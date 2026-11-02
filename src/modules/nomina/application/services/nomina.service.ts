@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   HttpException,
   Inject,
   Injectable,
@@ -11,7 +12,9 @@ import type {
   EmployeeLoan,
   PayrollPeriod,
 } from 'src/entities';
+import { LOAN_INSTALLMENT_REVERSAL_MESSAGE } from 'src/modules/liquidaciones/domain/errors/loan-installment-reversal.error';
 import type { PayrollLineResponseDto } from 'src/modules/liquidaciones/infraestructure/http/dtos/payroll-line-response.dto';
+import { LoanStatus } from 'src/modules/loans/enums/loan-status.enum';
 import {
   inicioDelDia,
   inicioDelDiaSiguiente,
@@ -187,15 +190,21 @@ export class NominaService {
     private readonly payrollInputsRepository: PayrollInputsRepositoryPort,
   ) {}
 
+  /**
+   * Con `replacing` calcula cómo quedaría esa liquidación guardada: la ignora
+   * al buscar cruces y parte del estado de los préstamos antes de sus descuentos.
+   */
   async calculatePreLiquidation(
     employee: Employee,
     periodStart: string,
     periodEnd: string,
+    replacing?: PayrollPeriod,
   ): Promise<PreLiquidationCalculation> {
-    const [outcome] = await this.calculateEmployees([employee], {
-      periodStart,
-      periodEnd,
-    });
+    const [outcome] = await this.calculateEmployees(
+      [employee],
+      { periodStart, periodEnd },
+      replacing,
+    );
 
     if (isEmployeeError(outcome)) {
       throw new UnprocessableEntityException(
@@ -209,6 +218,7 @@ export class NominaService {
   private async calculateEmployees(
     employees: Employee[],
     period: PayrollRange,
+    replacing?: PayrollPeriod,
   ): Promise<EmployeeOutcome[]> {
     if (employees.length === 0) {
       return [];
@@ -218,10 +228,12 @@ export class NominaService {
     const employeeIds = employees.map((employee) => employee.id);
     const periodFirstInstant = inicioDelDia(period.periodStart);
     const semesters = context.serviceBonusSemesters;
+    const isNotReplaced = (payrollPeriod: PayrollPeriod) =>
+      !replacing || payrollPeriod.id !== replacing.id;
     const [
       attendanceRecords,
       disabilityLeaves,
-      loans,
+      activeLoans,
       payrollPeriods,
       semesterPayrollPeriods,
     ] = await Promise.all([
@@ -254,6 +266,11 @@ export class NominaService {
           )
         : Promise.resolve([]),
     ]);
+    const loans = await this.restoreReplacedLoans(
+      activeLoans,
+      replacing,
+      period.periodEnd,
+    );
     const isInPeriod = (record: AttendanceRecord) =>
       new Date(record.check_in) >= periodFirstInstant;
 
@@ -278,14 +295,69 @@ export class NominaService {
             (loan) => Number(loan.employeeId) === employee.id,
           ),
           payrollPeriods: payrollPeriods.filter(
-            (payrollPeriod) => payrollPeriod.employee.id === employee.id,
+            (payrollPeriod) =>
+              payrollPeriod.employee.id === employee.id &&
+              isNotReplaced(payrollPeriod),
           ),
           semesterPayrollPeriods: semesterPayrollPeriods.filter(
-            (payrollPeriod) => payrollPeriod.employee.id === employee.id,
+            (payrollPeriod) =>
+              payrollPeriod.employee.id === employee.id &&
+              isNotReplaced(payrollPeriod),
           ),
         }),
       ),
     );
+  }
+
+  /**
+   * Préstamos como estaban antes de la liquidación que se reemplaza. Incluye
+   * los que ella saldó, que ya no aparecen entre los activos.
+   */
+  private async restoreReplacedLoans(
+    activeLoans: EmployeeLoan[],
+    replacing: PayrollPeriod | undefined,
+    periodEnd: string,
+  ): Promise<EmployeeLoan[]> {
+    const installments = replacing?.loan_installments ?? [];
+
+    if (installments.length === 0) {
+      return activeLoans;
+    }
+
+    const loanIds = installments.map((installment) => installment.loanId);
+    const discountedLoans =
+      await this.payrollInputsRepository.findLoansByIds(loanIds);
+    const restoredLoans = installments.flatMap((installment) => {
+      const loan = discountedLoans.find(
+        (item) => item.id === installment.loanId,
+      );
+
+      if (
+        Number(loan?.outstandingBalance) !== Number(installment.newBalance) ||
+        Number(loan?.pendingInstallments) !==
+          Number(installment.remainingInstallments)
+      ) {
+        throw new ConflictException(LOAN_INSTALLMENT_REVERSAL_MESSAGE);
+      }
+
+      const discountedLoan = loan as EmployeeLoan;
+
+      return aFechaCalendario(discountedLoan.grantedAt) <= periodEnd
+        ? [
+            {
+              ...discountedLoan,
+              outstandingBalance: installment.previousBalance,
+              pendingInstallments: installment.previousPendingInstallments,
+              status: LoanStatus.ACTIVO,
+            },
+          ]
+        : [];
+    });
+
+    return [
+      ...activeLoans.filter((loan) => !loanIds.includes(loan.id)),
+      ...restoredLoans,
+    ];
   }
 
   /**

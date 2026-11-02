@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 
 import {
   AttendanceRecord,
@@ -81,6 +81,10 @@ export class PayrollInputsTypeOrmRepository implements PayrollInputsRepositoryPo
       .andWhere('loan.grantedAt <= :periodEnd', { periodEnd })
       .orderBy('loan.id', 'ASC')
       .getMany();
+  }
+
+  findLoansByIds(loanIds: number[]): Promise<EmployeeLoan[]> {
+    return this.loanRepository.findBy({ id: In(loanIds) });
   }
 
   async findPayrollPeriods(

@@ -3,9 +3,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
 import { EmployeeLoan } from 'src/entities/employee_loan.model';
 import { LoanInstallment } from 'src/entities/loan-installment.model';
+import { PayrollLine } from 'src/entities/payroll_line.model';
 import { PayrollPeriod } from 'src/entities/payroll-period.model';
 import { LoanStatus } from 'src/modules/loans/enums/loan-status.enum';
 import { LoanInstallmentConflictError } from 'src/modules/liquidaciones/domain/errors/loan-installment-conflict.error';
+import { LoanInstallmentReversalError } from 'src/modules/liquidaciones/domain/errors/loan-installment-reversal.error';
 import {
   PayrollPeriodRepositoryPort,
   PayrollPeriodFilters,
@@ -23,7 +25,8 @@ export class PayrollPeriodTypeOrmRepository implements PayrollPeriodRepositoryPo
     const queryBuilder = this.repository
       .createQueryBuilder('payrollPeriod')
       .leftJoinAndSelect('payrollPeriod.employee', 'employee')
-      .orderBy('payrollPeriod.period_start', 'DESC');
+      .orderBy('payrollPeriod.period_start', 'DESC')
+      .addOrderBy('payrollPeriod.id', 'DESC');
 
     if (filters.employeeId) {
       queryBuilder.andWhere('employee.id = :employeeId', {
@@ -73,54 +76,139 @@ export class PayrollPeriodTypeOrmRepository implements PayrollPeriodRepositoryPo
       return this.repository.save(payrollPeriod);
     }
 
+    return this.repository.manager.transaction((manager) =>
+      this.saveWithInstallments(manager, payrollPeriod, loanInstallments),
+    );
+  }
+
+  replace(
+    payrollPeriod: PayrollPeriod,
+    loanInstallments: LoanInstallmentPlan[],
+  ): Promise<PayrollPeriod> {
     return this.repository.manager.transaction(async (manager) => {
+      await this.revertSavedValues(manager, payrollPeriod.id);
+
+      return this.saveWithInstallments(
+        manager,
+        payrollPeriod,
+        loanInstallments,
+      );
+    });
+  }
+
+  delete(payrollPeriodId: number): Promise<void> {
+    return this.repository.manager.transaction(async (manager) => {
+      await this.revertSavedValues(manager, payrollPeriodId);
+      await manager.delete(PayrollPeriod, { id: payrollPeriodId });
+    });
+  }
+
+  private async saveWithInstallments(
+    manager: EntityManager,
+    payrollPeriod: PayrollPeriod,
+    loanInstallments: LoanInstallmentPlan[],
+  ): Promise<PayrollPeriod> {
+    if (loanInstallments.length > 0) {
       await this.lockUnchangedLoans(manager, loanInstallments);
+    }
 
-      const savedPayrollPeriod = await manager.save(payrollPeriod);
-      const savedInstallments: LoanInstallment[] = [];
+    const savedPayrollPeriod = await manager.save(payrollPeriod);
+    const savedInstallments: LoanInstallment[] = [];
 
-      for (const plan of loanInstallments) {
-        const payrollLine = savedPayrollPeriod.payroll_lines.find(
-          (line) =>
-            line.type === 'DEDUCCION' && line.concept_name === plan.conceptName,
+    for (const plan of loanInstallments) {
+      const payrollLine = savedPayrollPeriod.payroll_lines.find(
+        (line) =>
+          line.type === 'DEDUCCION' && line.concept_name === plan.conceptName,
+      );
+      if (!payrollLine) {
+        throw new Error(
+          `La liquidación no tiene el concepto "${plan.conceptName}" de la cuota del préstamo #${plan.loanId}.`,
         );
-        if (!payrollLine) {
-          throw new Error(
-            `La liquidación no tiene el concepto "${plan.conceptName}" de la cuota del préstamo #${plan.loanId}.`,
-          );
+      }
+
+      savedInstallments.push(
+        await manager.save(
+          Object.assign(new LoanInstallment(), {
+            loanId: plan.loanId,
+            employeeId: savedPayrollPeriod.employee.id,
+            payrollPeriodId: savedPayrollPeriod.id,
+            payrollLineId: payrollLine.id,
+            installmentsApplied: plan.installments,
+            scheduledAmount: plan.scheduledAmount,
+            amount: plan.amount,
+            previousBalance: plan.previousBalance,
+            newBalance: plan.newBalance,
+            previousPendingInstallments: plan.previousPendingInstallments,
+            remainingInstallments: plan.remainingInstallments,
+          }),
+        ),
+      );
+      await manager.update(
+        EmployeeLoan,
+        { id: plan.loanId },
+        {
+          outstandingBalance: plan.newBalance,
+          pendingInstallments: plan.remainingInstallments,
+          status:
+            plan.newBalance === 0 ? LoanStatus.SALDADO : LoanStatus.ACTIVO,
+        },
+      );
+    }
+
+    savedPayrollPeriod.loan_installments = savedInstallments;
+    return savedPayrollPeriod;
+  }
+
+  /**
+   * Devuelve a cada préstamo el saldo y las cuotas que tenía antes de la
+   * liquidación y borra sus cuotas y conceptos. Solo se puede si la liquidación
+   * sigue siendo el último movimiento del préstamo.
+   */
+  private async revertSavedValues(
+    manager: EntityManager,
+    payrollPeriodId: number,
+  ): Promise<void> {
+    const installments = await manager.find(LoanInstallment, {
+      where: { payrollPeriodId },
+    });
+
+    if (installments.length > 0) {
+      const loans = await manager
+        .getRepository(EmployeeLoan)
+        .createQueryBuilder('loan')
+        .setLock('pessimistic_write')
+        .where('loan.id IN (:...loanIds)', {
+          loanIds: installments.map((installment) => installment.loanId),
+        })
+        .getMany();
+
+      for (const installment of installments) {
+        const loan = loans.find((item) => item.id === installment.loanId);
+        const isLastMovement =
+          Number(loan?.outstandingBalance) === Number(installment.newBalance) &&
+          Number(loan?.pendingInstallments) ===
+            Number(installment.remainingInstallments);
+
+        if (!isLastMovement) {
+          throw new LoanInstallmentReversalError(installment.loanId);
         }
 
-        savedInstallments.push(
-          await manager.save(
-            Object.assign(new LoanInstallment(), {
-              loanId: plan.loanId,
-              employeeId: savedPayrollPeriod.employee.id,
-              payrollPeriodId: savedPayrollPeriod.id,
-              payrollLineId: payrollLine.id,
-              installmentsApplied: plan.installments,
-              scheduledAmount: plan.scheduledAmount,
-              amount: plan.amount,
-              previousBalance: plan.previousBalance,
-              newBalance: plan.newBalance,
-              previousPendingInstallments: plan.previousPendingInstallments,
-              remainingInstallments: plan.remainingInstallments,
-            }),
-          ),
-        );
         await manager.update(
           EmployeeLoan,
-          { id: plan.loanId },
+          { id: installment.loanId },
           {
-            outstandingBalance: plan.newBalance,
-            pendingInstallments: plan.remainingInstallments,
-            status:
-              plan.newBalance === 0 ? LoanStatus.SALDADO : LoanStatus.ACTIVO,
+            outstandingBalance: installment.previousBalance,
+            pendingInstallments: installment.previousPendingInstallments,
+            status: LoanStatus.ACTIVO,
           },
         );
       }
 
-      savedPayrollPeriod.loan_installments = savedInstallments;
-      return savedPayrollPeriod;
+      await manager.delete(LoanInstallment, { payrollPeriodId });
+    }
+
+    await manager.delete(PayrollLine, {
+      payroll_period: { id: payrollPeriodId },
     });
   }
 

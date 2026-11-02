@@ -34,6 +34,9 @@ export interface PayrollInputsRepositoryPort {
     periodEnd: string,
   ): Promise<EmployeeLoan[]>;
 
+  /** Préstamos indicados, sin importar su estado. */
+  findLoansByIds(loanIds: number[]): Promise<EmployeeLoan[]>;
+
   /** Liquidaciones registradas (con su empleado) que se cruzan con el período. */
   findPayrollPeriods(
     employeeIds: number[],

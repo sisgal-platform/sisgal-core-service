@@ -3,6 +3,7 @@ import { Employee } from 'src/entities/employee.model';
 import { EmployeeRepositoryPort } from 'src/modules/empleados/domain/ports/employee-repository.port';
 import { NominaService } from 'src/modules/nomina/application/services/nomina.service';
 import { PreLiquidationRequestDto } from 'src/modules/nomina/infrastructure/http/dtos/pre-liquidation-request.dto';
+import { PayrollPeriodService } from './payroll-period.service';
 import { PreLiquidationService } from './pre-liquidation.service';
 
 describe('PreLiquidationService', () => {
@@ -16,9 +17,11 @@ describe('PreLiquidationService', () => {
   > = {
     calculatePreLiquidation: jest.fn(),
   };
+  const payrollPeriodService = { findById: jest.fn() };
   const service = new PreLiquidationService(
     employeeRepository as EmployeeRepositoryPort,
     nominaService as unknown as NominaService,
+    payrollPeriodService as unknown as PayrollPeriodService,
   );
   const employee = {
     id: 1,
@@ -131,5 +134,38 @@ describe('PreLiquidationService', () => {
       NotFoundException,
     );
     expect(nominaService.calculatePreLiquidation).not.toHaveBeenCalled();
+  });
+
+  it('previsualiza la edición de una liquidación sin guardarla', async () => {
+    const current = { id: 8, employee };
+    payrollPeriodService.findById.mockResolvedValue(current);
+    nominaService.calculatePreLiquidation.mockResolvedValue({
+      earnings: [],
+      deductions: [],
+      totalEarnings: 0,
+      totalDeductions: 0,
+      netPay: 0,
+      loanObservations: [],
+      workedHours: [],
+    } as never);
+
+    const result = await service.generateForUpdate(8, period);
+
+    expect(nominaService.calculatePreLiquidation).toHaveBeenCalledWith(
+      employee,
+      '2026-09-01',
+      '2026-09-30',
+      current,
+    );
+    expect(result.employeeId).toBe(1);
+  });
+
+  it('rechaza previsualizar con el inicio posterior al fin', async () => {
+    await expect(
+      service.generateForUpdate(8, {
+        periodStart: '2026-09-30',
+        periodEnd: '2026-09-01',
+      }),
+    ).rejects.toThrow(BadRequestException);
   });
 });

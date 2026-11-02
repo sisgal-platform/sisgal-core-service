@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   InternalServerErrorException,
   UnprocessableEntityException,
 } from '@nestjs/common';
@@ -30,6 +31,7 @@ describe('NominaService', () => {
     findAttendanceRecords: jest.fn(),
     findDisabilityLeaves: jest.fn(),
     findActiveLoans: jest.fn(),
+    findLoansByIds: jest.fn(),
     findPayrollPeriods: jest.fn(),
   };
 
@@ -752,6 +754,90 @@ describe('NominaService', () => {
           'No existe un valor vigente y válido para los días de prima de servicios por año al 30/06/2026.',
         ),
       );
+    });
+
+    describe('al reemplazar una liquidación guardada', () => {
+      const replacing = {
+        id: 8,
+        employee: ana,
+        period_start: '2026-09-01',
+        period_end: '2026-09-30',
+        config_snapshot: {},
+        loan_installments: [
+          {
+            loanId: 4,
+            newBalance: '0.00',
+            remainingInstallments: 0,
+            previousBalance: '300000.00',
+            previousPendingInstallments: 3,
+          },
+        ],
+      } as unknown as PayrollPeriod;
+
+      it('ignora la liquidación reemplazada y descuenta sobre el saldo anterior, aunque ella haya saldado el préstamo', async () => {
+        payrollInputsRepository.findPayrollPeriods.mockResolvedValue([
+          replacing,
+        ]);
+        payrollInputsRepository.findActiveLoans.mockResolvedValue([]);
+        payrollInputsRepository.findLoansByIds.mockResolvedValue([
+          loanOfAna({
+            outstandingBalance: '0.00',
+            pendingInstallments: 0,
+            status: 'SALDADO',
+          }),
+        ]);
+
+        const result = await service.calculatePreLiquidation(
+          ana,
+          '2026-09-01',
+          '2026-09-30',
+          replacing,
+        );
+
+        expect(result.loanInstallments).toEqual([
+          expect.objectContaining({
+            loanId: 4,
+            previousBalance: 300_000,
+            previousPendingInstallments: 3,
+          }),
+        ]);
+      });
+
+      it('sigue rechazando un cruce con otra liquidación', async () => {
+        payrollInputsRepository.findPayrollPeriods.mockResolvedValue([
+          { ...replacing, id: 9 } as PayrollPeriod,
+        ]);
+        payrollInputsRepository.findLoansByIds.mockResolvedValue([
+          loanOfAna({ outstandingBalance: '0.00', pendingInstallments: 0 }),
+        ]);
+
+        await expect(
+          service.calculatePreLiquidation(
+            ana,
+            '2026-09-01',
+            '2026-09-30',
+            replacing,
+          ),
+        ).rejects.toThrow('Ya tiene una liquidación registrada');
+      });
+
+      it('responde con un conflicto si el préstamo tuvo movimientos posteriores', async () => {
+        payrollInputsRepository.findLoansByIds.mockResolvedValue([
+          loanOfAna({
+            outstandingBalance: '100000.00',
+            pendingInstallments: 1,
+          }),
+        ]);
+
+        await expect(
+          service.calculatePreLiquidation(
+            ana,
+            '2026-09-01',
+            '2026-09-30',
+            replacing,
+          ),
+        ).rejects.toThrow(ConflictException);
+      });
     });
   });
 });
