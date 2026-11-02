@@ -8,6 +8,8 @@ import {
 import * as disabilityLeaveRepositoryPort from '../../domain/ports/disability-leave-repository.port';
 import { RegisterDisabilityLeaveDto } from '../../infraestructure/http/dtos/register-disability-leave.dto';
 import { ListDisabilityLeaveQueryDto } from '../../infraestructure/http/dtos/list-disability-leave-query.dto';
+import { UpdateDisabilityLeaveDto } from '../../infraestructure/http/dtos/update-disability-leave.dto';
+import { DisabilityType } from '../../domain/value-objects/disability-type.enum';
 import { DisabilityLeave } from 'src/entities/disability_leave.model';
 import {
   EMPLOYEE_REPOSITORY_PORT,
@@ -16,7 +18,13 @@ import {
 import { AUDIT_PORT } from 'src/application/ports/audit/audit.port';
 import type { AuditPort } from 'src/application/ports/audit/audit.port';
 import type { AuthUser } from 'src/application/ports/auth/auth-user';
-import { aDate } from 'src/modules/parametros-nomina/domain/vigencia';
+import { formatCalendarDate } from 'src/modules/nomina/domain/payroll-days';
+import {
+  aDate,
+  aFechaCalendario,
+} from 'src/modules/parametros-nomina/domain/vigencia';
+
+const MILLISECONDS_PER_DAY = 1000 * 60 * 60 * 24;
 
 @Injectable()
 export class DisabilityLeaveService {
@@ -70,9 +78,7 @@ export class DisabilityLeaveService {
 
     // Cantidad de días del período, contando ambos extremos
     const totalDays =
-      Math.round(
-        (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
-      ) + 1;
+      Math.round((endDate.getTime() - startDate.getTime()) / MILLISECONDS_PER_DAY) + 1;
 
     const disabilityLeave = new DisabilityLeave();
     disabilityLeave.employee = employee;
@@ -119,6 +125,115 @@ export class DisabilityLeaveService {
     }
   }
 
+  /**
+   * El empleado no cambia: si se registró a otra persona, se elimina y se
+   * vuelve a registrar. Los días y el tipo afectan la nómina, así que no se
+   * cambian mientras una liquidación guardada incluya las fechas anteriores o
+   * las nuevas.
+   */
+  async update(
+    id: number,
+    dto: UpdateDisabilityLeaveDto,
+    actor: AuthUser,
+  ): Promise<DisabilityLeave> {
+    const current = await this.findExisting(id);
+    const employeeId = current.employee.id;
+    const currentStart = aFechaCalendario(current.start_date);
+    const currentEnd = aFechaCalendario(current.end_date);
+    const startDate = dto.startDate?.slice(0, 10) ?? currentStart;
+    const endDate = dto.endDate?.slice(0, 10) ?? currentEnd;
+    const type = dto.type ?? current.type;
+
+    if (endDate < startDate) {
+      throw new BadRequestException(
+        'La fecha de finalización debe ser igual o posterior a la fecha de inicio.',
+      );
+    }
+
+    const description =
+      type === DisabilityType.OTROS
+        ? (dto.otherTypeDescription ?? current.other_type_description)?.trim()
+        : null;
+    if (type === DisabilityType.OTROS && !description) {
+      throw new BadRequestException(
+        'Describe el tipo de incapacidad o licencia.',
+      );
+    }
+
+    const solapados = await this.disabilityLeaveRepository.findOverlapping(
+      employeeId,
+      startDate,
+      endDate,
+      id,
+    );
+    if (solapados.length > 0) {
+      throw new ConflictException(
+        'Ya existe un registro para parte del período seleccionado.',
+      );
+    }
+
+    if (
+      startDate !== currentStart ||
+      endDate !== currentEnd ||
+      type !== current.type
+    ) {
+      await this.assertNoSavedPayroll(employeeId, currentStart, currentEnd);
+      await this.assertNoSavedPayroll(employeeId, startDate, endDate);
+    }
+
+    current.type = type;
+    current.other_type_description = description ?? null;
+    current.start_date = aDate(startDate);
+    current.end_date = aDate(endDate);
+    current.total_days =
+      Math.round(
+        (Date.parse(endDate) - Date.parse(startDate)) / MILLISECONDS_PER_DAY,
+      ) + 1;
+
+    const updated = await this.disabilityLeaveRepository.save(current);
+
+    this.auditPort.log({
+      action: 'DISABILITY_LEAVE_UPDATED',
+      module: 'Incapacidades',
+      resource: 'DisabilityLeave',
+      resourceId: id,
+      result: 'SUCCESS',
+      message: `Se actualizó una incapacidad del empleado "${current.employee.firstName} ${current.employee.lastName}".`,
+      metadata: {
+        employeeId,
+        performedBy: actor.id,
+        previous: { startDate: currentStart, endDate: currentEnd },
+        current: { startDate, endDate, type },
+      },
+    });
+
+    return updated;
+  }
+
+  async delete(id: number, actor: AuthUser): Promise<void> {
+    const current = await this.findExisting(id);
+    const employeeId = current.employee.id;
+    const startDate = aFechaCalendario(current.start_date);
+    const endDate = aFechaCalendario(current.end_date);
+
+    await this.assertNoSavedPayroll(employeeId, startDate, endDate);
+    await this.disabilityLeaveRepository.delete(id);
+
+    this.auditPort.log({
+      action: 'DISABILITY_LEAVE_DELETED',
+      module: 'Incapacidades',
+      resource: 'DisabilityLeave',
+      resourceId: id,
+      result: 'SUCCESS',
+      message: `Se eliminó una incapacidad del empleado "${current.employee.firstName} ${current.employee.lastName}".`,
+      metadata: {
+        employeeId,
+        performedBy: actor.id,
+        previous: { startDate, endDate, type: current.type },
+      },
+    });
+  }
+
   // Búsqueda por empleado, nombre, cargo, estado y/o rango de fechas; todos los filtros son opcionales y se combinan con AND
   async findAll(query: ListDisabilityLeaveQueryDto): Promise<DisabilityLeave[]> {
     if (
@@ -132,5 +247,36 @@ export class DisabilityLeaveService {
     }
 
     return this.disabilityLeaveRepository.findAll(query);
+  }
+
+  private async findExisting(id: number): Promise<DisabilityLeave> {
+    const disabilityLeave = await this.disabilityLeaveRepository.findById(id);
+    if (!disabilityLeave) {
+      throw new NotFoundException(
+        `No se encontró una incapacidad con el identificador ${id}.`,
+      );
+    }
+
+    return disabilityLeave;
+  }
+
+  // La liquidación guardó los días de incapacidad con los que se calculó
+  private async assertNoSavedPayroll(
+    employeeId: number,
+    startDate: string,
+    endDate: string,
+  ): Promise<void> {
+    const [payrollPeriod] =
+      await this.disabilityLeaveRepository.findOverlappingPayrollPeriods(
+        employeeId,
+        startDate,
+        endDate,
+      );
+
+    if (payrollPeriod) {
+      throw new ConflictException(
+        `La liquidación del ${formatCalendarDate(aFechaCalendario(payrollPeriod.period_start))} al ${formatCalendarDate(aFechaCalendario(payrollPeriod.period_end))} incluye estas fechas. Para cambiar la incapacidad, elimina primero esa liquidación.`,
+      );
+    }
   }
 }

@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from 'typeorm';
 import { DisabilityLeave } from "src/entities/disability_leave.model";
+import { PayrollPeriod } from "src/entities/payroll-period.model";
 import {
     DisabilityLeaveRepositoryPort,
     DisabilityLeaveListFilters,
@@ -12,10 +13,23 @@ export class DisabilityLeaveTypeOrmRepository implements DisabilityLeaveReposito
     constructor(
         @InjectRepository(DisabilityLeave)
         private readonly repository: Repository<DisabilityLeave>,
+        @InjectRepository(PayrollPeriod)
+        private readonly payrollPeriodRepository: Repository<PayrollPeriod>,
     ) {}
 
     async save(disabilityLeave: DisabilityLeave): Promise<DisabilityLeave> {
         return this.repository.save(disabilityLeave);
+    }
+
+    async findById(id: number): Promise<DisabilityLeave | null> {
+        return this.repository.findOne({
+            where: { id },
+            relations: { employee: { jobPosition: true } },
+        });
+    }
+
+    async delete(id: number): Promise<void> {
+        await this.repository.delete({ id });
     }
 
     async findAll(filters: DisabilityLeaveListFilters): Promise<DisabilityLeave[]> {
@@ -65,13 +79,34 @@ export class DisabilityLeaveTypeOrmRepository implements DisabilityLeaveReposito
         employeeId: number,
         startDate: string,
         endDate: string,
+        excludedId?: number,
     ): Promise<DisabilityLeave[]> {
-        return this.repository
+        const queryBuilder = this.repository
             .createQueryBuilder('disabilityLeave')
             .innerJoin('disabilityLeave.employee', 'employee')
             .where('employee.id = :employeeId', { employeeId })
             .andWhere('disabilityLeave.start_date <= :endDate', { endDate })
-            .andWhere('disabilityLeave.end_date >= :startDate', { startDate })
+            .andWhere('disabilityLeave.end_date >= :startDate', { startDate });
+
+        if (excludedId !== undefined) {
+            queryBuilder.andWhere('disabilityLeave.id <> :excludedId', { excludedId });
+        }
+
+        return queryBuilder.getMany();
+    }
+
+    async findOverlappingPayrollPeriods(
+        employeeId: number,
+        startDate: string,
+        endDate: string,
+    ): Promise<PayrollPeriod[]> {
+        return this.payrollPeriodRepository
+            .createQueryBuilder('payrollPeriod')
+            .innerJoin('payrollPeriod.employee', 'employee')
+            .where('employee.id = :employeeId', { employeeId })
+            .andWhere('payrollPeriod.period_start <= :endDate', { endDate })
+            .andWhere('payrollPeriod.period_end >= :startDate', { startDate })
+            .orderBy('payrollPeriod.period_start', 'DESC')
             .getMany();
     }
 
