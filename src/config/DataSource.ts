@@ -29,6 +29,7 @@ import { AddLoanInstallments1791810000000 } from '../migrations/1791810000000-Ad
 import { AddEmployeeHireDateAndServiceBonusDays1791820000000 } from '../migrations/1791820000000-AddEmployeeHireDateAndServiceBonusDays';
 import { AddAttendanceLogMethodAndIdempotency1791830000000 } from '../migrations/1791830000000-AddAttendanceLogMethodAndIdempotency';
 import { CreateAuditoriaSchema1791840000000 } from '../migrations/1791840000000-CreateAuditoriaSchema';
+import { AddWeeklyLoanPeriodicity1791850000000 } from '../migrations/1791850000000-AddWeeklyLoanPeriodicity';
 import {
   AuditError,
   AuditEvent,
@@ -87,6 +88,7 @@ export const dataSourceOptions: DataSourceOptions = {
     AddEmployeeHireDateAndServiceBonusDays1791820000000,
     AddAttendanceLogMethodAndIdempotency1791830000000,
     CreateAuditoriaSchema1791840000000,
+    AddWeeklyLoanPeriodicity1791850000000,
   ],
 };
 
