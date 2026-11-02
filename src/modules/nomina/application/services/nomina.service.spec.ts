@@ -165,12 +165,12 @@ describe('NominaService', () => {
       expect(result.earnings).toEqual([
         { conceptName: 'Salario base', amount: 1_400_000 },
         { conceptName: 'Incapacidad enfermedad general', amount: 100_000 },
-        { conceptName: 'Horas extra diurnas', amount: 15_625 },
+        { conceptName: 'Horas extra diurnas', amount: 17_857.14 },
         { conceptName: 'Auxilio de transporte', amount: 232_488.67 },
       ]);
       expect(result.deductions).toEqual([
-        { conceptName: 'Salud', amount: 60_625 },
-        { conceptName: 'Pensión', amount: 60_625 },
+        { conceptName: 'Salud', amount: 60_714.29 },
+        { conceptName: 'Pensión', amount: 60_714.29 },
         {
           conceptName: 'Cuota préstamo #4',
           amount: 250_000,
@@ -198,9 +198,9 @@ describe('NominaService', () => {
         },
       ]);
       expect(result.loanObservations).toEqual([]);
-      expect(result.totalEarnings).toBe(1_748_113.67);
-      expect(result.totalDeductions).toBe(371_250);
-      expect(result.netPay).toBe(1_376_863.67);
+      expect(result.totalEarnings).toBe(1_750_345.81);
+      expect(result.totalDeductions).toBe(371_428.58);
+      expect(result.netPay).toBe(1_378_917.23);
       expect(result.workedHours).toEqual([
         {
           type: 'ORDINARIA_DIURNA',
@@ -212,13 +212,13 @@ describe('NominaService', () => {
       expect(result.configSnapshot).toMatchObject({
         liquidationDate: '2026-09-30',
         salaryBase: 1_500_000,
-        hourValue: 6_250,
+        hourValue: 7_142.86,
         workedDays: 28,
         disabilityDays: 2,
-        contributionBase: 1_515_625,
+        contributionBase: 1_517_857.14,
         healthRate: 4,
         pensionRate: 4,
-        maxLoanDeductions: 697_187.5,
+        maxLoanDeductions: 698_214.28,
         loanObservations: [],
       });
     });
@@ -233,8 +233,8 @@ describe('NominaService', () => {
       // 4% de 1.515.625 (sin el auxilio) y no de 1.748.113,67.
       expect(result.deductions).toEqual(
         expect.arrayContaining([
-          { conceptName: 'Salud', amount: 60_625 },
-          { conceptName: 'Pensión', amount: 60_625 },
+          { conceptName: 'Salud', amount: 60_714.29 },
+          { conceptName: 'Pensión', amount: 60_714.29 },
         ]),
       );
       expect(systemConfigRepository.getValue).toHaveBeenCalledWith(
@@ -250,7 +250,7 @@ describe('NominaService', () => {
         payrollInputsRepository.findAttendanceRecords,
       ).toHaveBeenCalledWith(
         [1],
-        new Date('2026-09-01T00:00:00-05:00'),
+        new Date('2026-08-31T00:00:00-05:00'),
         new Date('2026-10-01T00:00:00-05:00'),
       );
       expect(payrollInputsRepository.findDisabilityLeaves).toHaveBeenCalledWith(
@@ -352,11 +352,11 @@ describe('NominaService', () => {
           hours: 2,
         },
       ]);
-      // 4 h x 6.250 x 0,75 y 2 h x 6.250 x 1,10.
+      // Hora de 1.500.000 / 210: 4 h x 0,75 y 2 h x 1,10.
       expect(result.earnings).toEqual(
         expect.arrayContaining([
-          { conceptName: 'Recargo dominical diurno', amount: 18_750 },
-          { conceptName: 'Recargo dominical nocturno', amount: 13_750 },
+          { conceptName: 'Recargo dominical diurno', amount: 21_428.57 },
+          { conceptName: 'Recargo dominical nocturno', amount: 15_714.29 },
         ]),
       );
     });
@@ -393,16 +393,16 @@ describe('NominaService', () => {
       // 50% de 1.515.625 - 60.625 - 60.625.
       expect(result.deductions[2]).toEqual({
         conceptName: 'Cuota préstamo #9',
-        amount: 697_187.5,
+        amount: 698_214.28,
         loan: {
           loanId: 9,
           installments: 1,
           scheduledAmount: 5_000_000,
-          outstandingBalance: 4_302_812.5,
+          outstandingBalance: 4_301_785.72,
           pendingInstallments: 1,
         },
       });
-      expect(result.netPay).toBe(929_676.17);
+      expect(result.netPay).toBe(930_702.95);
       expect(result.loanObservations).toEqual([
         expect.objectContaining({
           loanId: 9,
@@ -658,6 +658,72 @@ describe('NominaService', () => {
     });
   });
 
+  describe('horas de la semana anterior al período', () => {
+    it('cuenta para el límite semanal sin pagarlas ni exigir su salida', async () => {
+      const jornadaDeOcho = (dia: string, id: number) =>
+        attendance(
+          id,
+          ana,
+          `2026-${dia}T08:00:00-05:00`,
+          `2026-${dia}T16:00:00-05:00`,
+        );
+      // Lunes 26 a viernes 30 de octubre (40 h, antes del período) y sábado 31
+      // tampoco; el período empieza el domingo 1 de noviembre.
+      payrollInputsRepository.findAttendanceRecords.mockResolvedValue([
+        jornadaDeOcho('10-26', 20),
+        jornadaDeOcho('10-27', 21),
+        jornadaDeOcho('10-28', 22),
+        jornadaDeOcho('10-29', 23),
+        jornadaDeOcho('10-30', 24),
+        attendance(25, ana, '2026-10-31T08:00:00-05:00', null),
+        jornadaDeOcho('11-01', 26),
+      ]);
+      payrollInputsRepository.findDisabilityLeaves.mockResolvedValue([]);
+
+      const result = await service.calculatePreLiquidation(
+        ana,
+        '2026-11-01',
+        '2026-11-30',
+      );
+
+      expect(
+        payrollInputsRepository.findAttendanceRecords,
+      ).toHaveBeenCalledWith(
+        [ana.id],
+        new Date('2026-10-26T00:00:00-05:00'),
+        new Date('2026-12-01T00:00:00-05:00'),
+      );
+      expect(result.workedHours).toEqual([
+        {
+          type: 'DOMINICAL_DIURNA',
+          label: 'Horas dominicales o festivas diurnas',
+          hours: 2,
+        },
+        {
+          type: 'EXTRA_DOMINICAL_DIURNA',
+          label: 'Horas extra dominicales diurnas',
+          hours: 6,
+        },
+      ]);
+    });
+  });
+
+  it('calcula el valor de la hora con la jornada semanal, no con el máximo diario', async () => {
+    payrollHoursRepository.findWorkdayConfig.mockResolvedValue({
+      ...workdayConfig,
+      max_week_hours: 44,
+    } as WorkdayConfig);
+
+    const result = await service.calculatePreLiquidation(
+      ana,
+      '2026-09-01',
+      '2026-09-30',
+    );
+
+    // 1.500.000 / 220.
+    expect(result.configSnapshot.hourValue).toBe(6_818.18);
+  });
+
   describe('prima de servicios', () => {
     const june = { periodStart: '2026-06-01', periodEnd: '2026-06-30' };
 
@@ -713,6 +779,39 @@ describe('NominaService', () => {
           }),
         ],
       });
+    });
+
+    it('calcula la prima con el salario promedio de las liquidaciones del semestre', async () => {
+      payrollInputsRepository.findDisabilityLeaves.mockResolvedValue([]);
+      payrollInputsRepository.findAttendanceRecords.mockResolvedValue([]);
+      payrollInputsRepository.findPayrollPeriods.mockImplementation(
+        async (_ids, start) =>
+          start === '2026-01-01'
+            ? ([
+                {
+                  employee: { id: ana.id },
+                  period_start: '2026-01-01',
+                  period_end: '2026-03-30',
+                  config_snapshot: { contributionBase: 5_400_000 },
+                },
+              ] as unknown as PayrollPeriod[])
+            : [],
+      );
+
+      const result = await service.calculatePreLiquidation(
+        { ...ana, hire_date: '2020-01-01' } as Employee,
+        '2026-06-01',
+        '2026-06-30',
+      );
+      const prima = result.earnings.find((line) =>
+        line.conceptName.startsWith('Prima de servicios'),
+      );
+
+      // 90 días a 1.800.000 y 90 días a 1.500.000: promedio de 1.650.000.
+      expect(result.configSnapshot.serviceBonuses).toEqual([
+        expect.objectContaining({ salaryBase: 1_650_000 }),
+      ]);
+      expect(prima?.serviceBonus?.baseAmount).toBe(1_899_095);
     });
 
     it('calcula la prima proporcional desde la fecha de ingreso', async () => {

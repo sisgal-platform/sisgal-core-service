@@ -1,5 +1,6 @@
 import {
   type ServiceBonusInput,
+  calculateSemesterAverageSalary,
   calculateServiceBonus,
   findServiceBonusSemesters,
 } from './service-bonus';
@@ -112,6 +113,60 @@ describe('service-bonus', () => {
         daysPerYear: 15,
         amount: 437_273.75,
       });
+    });
+  });
+
+  describe('calculateSemesterAverageSalary', () => {
+    const promedio = (
+      liquidatedEarnings: {
+        start: string;
+        end: string;
+        salaryEarnings: number;
+      }[],
+      hireDate = '2020-01-01',
+    ) =>
+      calculateSemesterAverageSalary({
+        semester: firstSemester2026,
+        hireDate,
+        salaryBase: 2_000_000,
+        liquidatedEarnings,
+      });
+
+    it('usa el salario base si ninguna liquidación cubre el semestre', () => {
+      expect(promedio([])).toBe(2_000_000);
+    });
+
+    it('incluye las horas extra y recargos de las liquidaciones', () => {
+      // Enero con 2.600.000 y el resto del semestre con el salario base.
+      expect(
+        promedio([
+          { start: '2026-01-01', end: '2026-01-31', salaryEarnings: 2_600_000 },
+        ]),
+      ).toBe(2_100_000);
+    });
+
+    it('cuenta solo la parte de la liquidación que cae en el semestre', () => {
+      // 15 de sus 30 días son del semestre: 2.000.000, más 165 días a 2.000.000 al mes.
+      expect(
+        promedio([
+          { start: '2026-06-16', end: '2026-07-15', salaryEarnings: 4_000_000 },
+        ]),
+      ).toBe(2_166_666.67);
+    });
+
+    it('promedia desde la fecha de ingreso', () => {
+      expect(
+        promedio(
+          [
+            {
+              start: '2026-06-01',
+              end: '2026-06-30',
+              salaryEarnings: 2_600_000,
+            },
+          ],
+          '2026-05-01',
+        ),
+      ).toBe(2_300_000);
     });
   });
 });

@@ -42,41 +42,35 @@ describe('PayrollHoursService', () => {
   } as WorkRateConfig;
 
   it('divide un intervalo que atraviesa la noche en segmentos diurnos y nocturnos', async () => {
-    const overnightConfig = {
+    repository.findWorkdayConfig.mockResolvedValue({
       ...workdayConfig,
+      max_day_hours: 12,
       day_start: '20:00',
       day_end: '21:00',
       night_start: '21:00',
       night_end: '06:00',
-    } as WorkdayConfig;
+    } as WorkdayConfig);
+    repository.findWorkRateConfig.mockImplementation(
+      async (type) =>
+        ({
+          ...rate,
+          type,
+          multiplier: type.includes('NOCTURNA') ? 1.25 : 1,
+        }) as WorkRateConfig,
+    );
 
-    repository.findWorkdayConfig.mockResolvedValue(overnightConfig);
-
-    repository.findWorkRateConfig.mockImplementation(async (type) => {
-      return {
-        ...rate,
-        type,
-        multiplier: type.includes('NOCTURNA') ? 1.25 : 1,
-        valid_from: new Date('2026-01-01T00:00:00-05:00'),
-        valid_to: null,
-      } as WorkRateConfig;
-    });
-
-    // De 20:00 del 10 de marzo a 23:00 del 11 de marzo, hora colombiana.
     const start = new Date('2026-03-10T20:00:00-05:00');
-    const end = new Date('2026-03-12T00:00:00-05:00');
+    const end = new Date('2026-03-11T06:00:00-05:00');
 
     const result = await service.classifyWorkedInterval(7, start, end);
 
     expect(result).toEqual([
       expect.objectContaining({
-        start: new Date('2026-03-10T20:00:00-05:00'),
+        start,
         end: new Date('2026-03-10T21:00:00-05:00'),
         hours: 1,
         period: 'DIURNA',
         type: 'ORDINARIA_DIURNA',
-        multiplier: 1,
-        adjustedHours: 1,
       }),
       expect.objectContaining({
         start: new Date('2026-03-10T21:00:00-05:00'),
@@ -84,50 +78,18 @@ describe('PayrollHoursService', () => {
         hours: 3,
         period: 'NOCTURNA',
         type: 'ORDINARIA_NOCTURNA',
-        multiplier: 1.25,
-        adjustedHours: 3.75,
       }),
       expect.objectContaining({
         start: new Date('2026-03-11T00:00:00-05:00'),
-        end: new Date('2026-03-11T06:00:00-05:00'),
+        end,
         hours: 6,
         period: 'NOCTURNA',
         type: 'ORDINARIA_NOCTURNA',
         multiplier: 1.25,
         adjustedHours: 7.5,
       }),
-      expect.objectContaining({
-        start: new Date('2026-03-11T20:00:00-05:00'),
-        end: new Date('2026-03-11T21:00:00-05:00'),
-        hours: 1,
-        period: 'DIURNA',
-        type: 'ORDINARIA_DIURNA',
-        multiplier: 1,
-        adjustedHours: 1,
-      }),
-      expect.objectContaining({
-        start: new Date('2026-03-11T21:00:00-05:00'),
-        end: new Date('2026-03-11T22:00:00-05:00'),
-        hours: 1,
-        period: 'NOCTURNA',
-        type: 'ORDINARIA_NOCTURNA',
-        multiplier: 1.25,
-        adjustedHours: 1.25,
-      }),
-
-      expect.objectContaining({
-        start: new Date('2026-03-11T22:00:00-05:00'),
-        end: new Date('2026-03-12T00:00:00-05:00'),
-        hours: 2,
-        period: 'NOCTURNA',
-        type: 'EXTRA_NOCTURNA',
-        multiplier: 1.25,
-        adjustedHours: 2.5,
-      }),
     ]);
-
     expect(repository.findWorkdayConfig).toHaveBeenCalledWith(start);
-    expect(repository.findWorkRateConfig).toHaveBeenCalledTimes(6);
   });
 
   it('usa la configuración válida más reciente para la fecha de inicio', async () => {
@@ -290,5 +252,140 @@ describe('PayrollHoursService', () => {
         new Date('2026-03-10T21:00:00.000Z'),
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  describe('horas extra entre marcaciones', () => {
+    const jornada = {
+      ...workdayConfig,
+      max_day_hours: 8,
+      max_week_hours: 42,
+      day_start: '06:00',
+      day_end: '19:00',
+      night_start: '19:00',
+      night_end: '06:00',
+    } as WorkdayConfig;
+    const intervalo = (inicio: string, fin: string) => ({
+      start: new Date(`${inicio}-05:00`),
+      end: new Date(`${fin}-05:00`),
+    });
+    const horasExtra = (
+      resultado: Awaited<ReturnType<typeof service.classifyWorkedIntervals>>,
+    ) =>
+      resultado.flatMap((item) =>
+        'error' in item
+          ? []
+          : item.segments
+              .filter((segment) => segment.isExtra)
+              .map((segment) => [segment.type, segment.hours]),
+      );
+
+    beforeEach(() => {
+      repository.findWorkdayConfig.mockResolvedValue(jornada);
+      repository.findWorkRateConfig.mockImplementation(
+        async (type) => ({ ...rate, type, multiplier: 1.25 }) as WorkRateConfig,
+      );
+    });
+
+    it('suma los turnos del mismo día para la jornada diaria', async () => {
+      // Martes 3 de noviembre: 5 h + 5 h, las 2 últimas son extra.
+      const resultado = await service.classifyWorkedIntervals(7, [
+        intervalo('2026-11-03T08:00:00', '2026-11-03T13:00:00'),
+        intervalo('2026-11-03T15:00:00', '2026-11-03T20:00:00'),
+      ]);
+
+      expect(horasExtra(resultado)).toEqual([
+        ['EXTRA_DIURNA', 1],
+        ['EXTRA_NOCTURNA', 1],
+      ]);
+    });
+
+    it('cuenta como una sola jornada el turno que cruza la medianoche', async () => {
+      const resultado = await service.classifyWorkedIntervals(7, [
+        intervalo('2026-11-03T16:00:00', '2026-11-04T02:00:00'),
+      ]);
+
+      expect(horasExtra(resultado)).toEqual([['EXTRA_NOCTURNA', 2]]);
+    });
+
+    it('no suma para la jornada el turno de otro día', async () => {
+      const resultado = await service.classifyWorkedIntervals(7, [
+        intervalo('2026-11-03T22:00:00', '2026-11-04T02:00:00'),
+        intervalo('2026-11-04T08:00:00', '2026-11-04T16:00:00'),
+      ]);
+
+      expect(horasExtra(resultado)).toEqual([]);
+    });
+
+    it('paga como extra lo que supera el límite semanal', async () => {
+      // Lunes a sábado, 8 h diarias: 48 h con un límite de 42.
+      const resultado = await service.classifyWorkedIntervals(
+        7,
+        ['02', '03', '04', '05', '06', '07'].map((dia) =>
+          intervalo(`2026-11-${dia}T08:00:00`, `2026-11-${dia}T16:00:00`),
+        ),
+      );
+
+      expect(horasExtra(resultado)).toEqual([['EXTRA_DIURNA', 6]]);
+    });
+
+    it('no cuenta para el límite semanal las horas que ya fueron extra por el día', async () => {
+      // 10 h de lunes a jueves (8 ordinarias y 2 extra cada día) y 8 h el viernes: 40 ordinarias.
+      const resultado = await service.classifyWorkedIntervals(7, [
+        ...['02', '03', '04', '05'].map((dia) =>
+          intervalo(`2026-11-${dia}T07:00:00`, `2026-11-${dia}T17:00:00`),
+        ),
+        intervalo('2026-11-06T08:00:00', '2026-11-06T16:00:00'),
+      ]);
+
+      expect(horasExtra(resultado)).toEqual([
+        ['EXTRA_DIURNA', 2],
+        ['EXTRA_DIURNA', 2],
+        ['EXTRA_DIURNA', 2],
+        ['EXTRA_DIURNA', 2],
+      ]);
+    });
+
+    it('reinicia el acumulado semanal cada lunes', async () => {
+      const semana = (dias: string[]) =>
+        dias.map((dia) =>
+          intervalo(`2026-11-${dia}T08:00:00`, `2026-11-${dia}T16:00:00`),
+        );
+
+      const resultado = await service.classifyWorkedIntervals(7, [
+        ...semana(['02', '03', '04', '05', '06']),
+        ...semana(['09', '10']),
+      ]);
+
+      expect(horasExtra(resultado)).toEqual([]);
+    });
+
+    it('cuenta las marcaciones previas de la semana sin clasificarlas', async () => {
+      const previas = ['02', '03', '04', '05', '06'].map((dia) =>
+        intervalo(`2026-11-${dia}T08:00:00`, `2026-11-${dia}T16:00:00`),
+      );
+
+      const resultado = await service.classifyWorkedIntervals(
+        7,
+        [intervalo('2026-11-07T08:00:00', '2026-11-07T16:00:00')],
+        previas,
+      );
+
+      expect(resultado).toHaveLength(1);
+      expect(horasExtra(resultado)).toEqual([['EXTRA_DIURNA', 6]]);
+      // Solo se consultan los multiplicadores de la marcación clasificada.
+      expect(repository.findWorkRateConfig).toHaveBeenCalledTimes(2);
+    });
+
+    it('informa el error de una marcación sin afectar las demás', async () => {
+      const resultado = await service.classifyWorkedIntervals(7, [
+        intervalo('2026-11-03T13:00:00', '2026-11-03T08:00:00'),
+        intervalo('2026-11-04T08:00:00', '2026-11-04T16:00:00'),
+      ]);
+
+      expect(resultado[0]).toEqual({ error: expect.any(BadRequestException) });
+      expect(resultado[1]).toMatchObject({
+        segments: [expect.objectContaining({ hours: 8, isExtra: false })],
+      });
+    });
   });
 });

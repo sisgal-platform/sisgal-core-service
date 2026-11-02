@@ -3,6 +3,7 @@ import {
   countCalendarDays,
   countPayrollDays,
   formatCalendarDate,
+  startOfWeek,
 } from './payroll-days';
 
 describe('countPayrollDays', () => {
@@ -63,5 +64,19 @@ describe('addCalendarDays', () => {
 describe('formatCalendarDate', () => {
   it('presenta la fecha como DD/MM/YYYY', () => {
     expect(formatCalendarDate('2026-10-05')).toBe('05/10/2026');
+  });
+});
+
+describe('startOfWeek', () => {
+  it('devuelve el lunes de la semana', () => {
+    expect(startOfWeek('2026-11-04')).toBe('2026-11-02');
+  });
+
+  it('considera el domingo como el último día de la semana', () => {
+    expect(startOfWeek('2026-11-01')).toBe('2026-10-26');
+  });
+
+  it('devuelve la misma fecha si ya es lunes', () => {
+    expect(startOfWeek('2026-11-02')).toBe('2026-11-02');
   });
 });

@@ -64,3 +64,11 @@ export function formatCalendarDate(date: string): string {
   const [year, month, day] = date.split('-');
   return `${day}/${month}/${year}`;
 }
+
+/** Lunes de la semana a la que pertenece una fecha (YYYY-MM-DD). */
+export function startOfWeek(date: string): string {
+  const [year, month, day] = parseCalendarDate(date);
+  const weekDay = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+
+  return addCalendarDays(date, -((weekDay + 6) % 7));
+}

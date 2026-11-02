@@ -5,6 +5,9 @@ import { Position } from 'src/entities/position.model';
 import { AttendanceRecord } from 'src/entities/attendance-record.model';
 import { PayrollPeriod } from 'src/entities/payroll-period.model';
 import { DisabilityLeave } from 'src/entities/disability_leave.model';
+import { SystemConfig } from 'src/entities/system-config.model';
+import { SYSTEM_CONFIG_REPOSITORY_PORT } from '../nomina/domain/ports/system-config-repository.port';
+import { SystemConfigTypeOrmRepository } from '../nomina/infrastructure/persistence/repositories/system-config.typeorm.repository';
 import { EmployeeController } from './infraestructure/http/controllers/employee.controller';
 import { EmployeeService } from './application/services/employee.service';
 import { EMPLOYEE_REPOSITORY_PORT } from './domain/ports/employee-repository.port';
@@ -20,7 +23,7 @@ import { WinstonAuditAdapter } from '../../infraestructure/logging/winston/winst
 @Module({
     // AuthModule aporta los guards; SucursalesModule exporta el port para consultar sucursales;
     // ParametrosNominaModule exporta el port de la jornada laboral que se asigna al empleado
-    imports: [AuthModule, SucursalesModule, ParametrosNominaModule,TypeOrmModule.forFeature([Employee, Position, AttendanceRecord, PayrollPeriod, DisabilityLeave])],
+    imports: [AuthModule, SucursalesModule, ParametrosNominaModule,TypeOrmModule.forFeature([Employee, Position, AttendanceRecord, PayrollPeriod, DisabilityLeave, SystemConfig])],
     controllers: [EmployeeController],
     providers: [
         EmployeeService,
@@ -32,6 +35,11 @@ import { WinstonAuditAdapter } from '../../infraestructure/logging/winston/winst
         {
             provide: POSITION_REPOSITORY_PORT,
             useClass: PositionTypeOrmRepository,
+        },
+        // Salario mínimo vigente, para validar el salario del empleado
+        {
+            provide: SYSTEM_CONFIG_REPOSITORY_PORT,
+            useClass: SystemConfigTypeOrmRepository,
         },
         // Auditoría de operaciones (mismo adaptador Winston que usa sucursales)
         {

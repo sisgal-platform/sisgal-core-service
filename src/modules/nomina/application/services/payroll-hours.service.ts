@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  HttpException,
   Inject,
   Injectable,
   NotFoundException,
@@ -14,6 +15,7 @@ import {
   getColombiaDate,
   getColombiaMinutes,
 } from 'src/shared/common/utils/colombia-date.util';
+import { startOfWeek } from '../../domain/payroll-days';
 
 export type TimePeriod = 'DIURNA' | 'NOCTURNA';
 export type DayType = 'ORDINARY' | 'SUNDAY' | 'HOLIDAY';
@@ -46,6 +48,28 @@ interface TimeSegment {
   period: TimePeriod;
 }
 
+export interface WorkedInterval {
+  start: Date;
+  end: Date;
+}
+
+/** Resultado de una marcación: sus horas o el error que impide clasificarla. */
+export type IntervalClassification =
+  { segments: ClassifiedHour[] } | { error: HttpException };
+
+/** Una marcación ya dividida en tramos diurnos y nocturnos. */
+interface PreparedInterval {
+  start: Date;
+  config: WorkdayConfig;
+  segments: TimeSegment[];
+}
+
+/** Horas ordinarias acumuladas por jornada (día de la entrada) y por semana. */
+interface OrdinaryHours {
+  byWorkday: Map<string, number>;
+  byWeek: Map<string, number>;
+}
+
 @Injectable()
 export class PayrollHoursService {
   constructor(
@@ -58,20 +82,103 @@ export class PayrollHoursService {
     start: Date,
     end: Date,
   ): Promise<ClassifiedHour[]> {
+    const [result] = await this.classifyWorkedIntervals(employeeId, [
+      { start, end },
+    ]);
+
+    if ('error' in result) {
+      throw result.error;
+    }
+
+    return result.segments;
+  }
+
+  /**
+   * Clasifica las marcaciones de un empleado, en orden cronológico. Una hora es
+   * extra si supera la jornada diaria o la semanal, así que las horas se
+   * acumulan entre marcaciones:
+   * - Por jornada: una marcación cuenta completa en el día de su entrada, aunque
+   *   termine después de medianoche, y los turnos de un mismo día se suman.
+   * - Por semana (lunes a domingo): las horas que ya fueron extra por la jornada
+   *   diaria no vuelven a contar para el límite semanal.
+   *
+   * `previousIntervals` son marcaciones anteriores de la semana, que no se
+   * clasifican: solo cuentan para el acumulado.
+   */
+  async classifyWorkedIntervals(
+    employeeId: number,
+    intervals: WorkedInterval[],
+    previousIntervals: WorkedInterval[] = [],
+  ): Promise<IntervalClassification[]> {
     this.validateEmployeeId(employeeId);
-    this.validateInterval(start, end);
 
-    const config = await this.getWorkdayConfig(start);
-    const timeSegments = this.classifyTimePeriod(start, end, config);
-    const dailySegments = this.determineDailyExtraHours(
-      timeSegments,
-      config.max_day_hours,
-    );
-    const classifiedSegments = await Promise.all(
-      dailySegments.map((segment) => this.classifySegment(employeeId, segment)),
+    const [previous, current] = await Promise.all([
+      Promise.all(previousIntervals.map((item) => this.prepareInterval(item))),
+      Promise.all(intervals.map((item) => this.prepareInterval(item))),
+    ]);
+    const ordinaryHours: OrdinaryHours = {
+      byWorkday: new Map(),
+      byWeek: new Map(),
+    };
+
+    for (const prepared of previous) {
+      if (!('error' in prepared)) {
+        this.splitExtraHours(prepared, ordinaryHours);
+      }
+    }
+
+    const splitIntervals = current.map((prepared) =>
+      'error' in prepared
+        ? prepared
+        : { segments: this.splitExtraHours(prepared, ordinaryHours) },
     );
 
-    return classifiedSegments;
+    return Promise.all(
+      splitIntervals.map(async (interval) => {
+        if ('error' in interval) {
+          return interval;
+        }
+
+        try {
+          return {
+            segments: await Promise.all(
+              interval.segments.map((segment) =>
+                this.classifySegment(employeeId, segment),
+              ),
+            ),
+          };
+        } catch (error) {
+          return { error: this.asHttpException(error) };
+        }
+      }),
+    );
+  }
+
+  private async prepareInterval({
+    start,
+    end,
+  }: WorkedInterval): Promise<PreparedInterval | { error: HttpException }> {
+    try {
+      this.validateInterval(start, end);
+
+      const config = await this.getWorkdayConfig(start);
+
+      return {
+        start,
+        config,
+        segments: this.classifyTimePeriod(start, end, config),
+      };
+    } catch (error) {
+      return { error: this.asHttpException(error) };
+    }
+  }
+
+  private asHttpException(error: unknown): HttpException {
+    if (error instanceof HttpException) {
+      return error;
+    }
+
+    throw error;
   }
 
   private async classifySegment(
@@ -252,80 +359,51 @@ export class PayrollHoursService {
     return calendarDate.getUTCDay() === 0 ? 'SUNDAY' : 'ORDINARY';
   }
 
-  private determineDailyExtraHours(
-    segments: TimeSegment[],
-    maxDayHours: number,
+  private splitExtraHours(
+    { start, config, segments }: PreparedInterval,
+    ordinaryHours: OrdinaryHours,
   ): Array<TimeSegment & { isExtra: boolean }> {
-    const dailySegments = new Map<string, TimeSegment[]>();
-
-    for (const segment of segments) {
-      let cursor = segment.start;
-
-      while (cursor < segment.end) {
-        const colombiaDate = this.getColombiaDate(cursor);
-        const nextMidnight = this.createColombiaDateTime(
-          this.addColombiaDays(colombiaDate, 1),
-          '00:00',
-        );
-
-        const chunkEnd = new Date(
-          Math.min(segment.end.getTime(), nextMidnight.getTime()),
-        );
-
-        const hours = this.calculateHours(cursor, chunkEnd);
-
-        const chunk: TimeSegment = {
-          start: new Date(cursor),
-          end: chunkEnd,
-          hours,
-          period: segment.period,
-        };
-
-        const daySegments = dailySegments.get(colombiaDate) ?? [];
-        daySegments.push(chunk);
-        dailySegments.set(colombiaDate, daySegments);
-
-        cursor = chunkEnd;
-      }
-    }
-
+    const workday = this.getColombiaDate(start);
+    const week = startOfWeek(workday);
     const result: Array<TimeSegment & { isExtra: boolean }> = [];
 
-    for (const daySegments of dailySegments.values()) {
-      daySegments.sort((a, b) => a.start.getTime() - b.start.getTime());
+    for (const segment of segments) {
+      const dayHours = ordinaryHours.byWorkday.get(workday) ?? 0;
+      const weekHours = ordinaryHours.byWeek.get(week) ?? 0;
+      const remainingCapacity = Math.max(
+        0,
+        Math.min(
+          Number(config.max_day_hours) - dayHours,
+          Number(config.max_week_hours) - weekHours,
+        ),
+      );
+      const ordinary = Math.min(segment.hours, remainingCapacity);
+      const extra = Number((segment.hours - ordinary).toFixed(2));
+      const splitAt = segment.start.getTime() + ordinary * 3_600_000;
 
-      let usedHours = 0;
-
-      for (const segment of daySegments) {
-        const remainingCapacity = Math.max(0, maxDayHours - usedHours);
-        const ordinaryHours = Math.min(segment.hours, remainingCapacity);
-        const extraHours = Math.max(0, segment.hours - remainingCapacity);
-
-        const splitAt = segment.start.getTime() + ordinaryHours * 3_600_000;
-
-        if (ordinaryHours > 0) {
-          result.push({
-            ...segment,
-            end: new Date(splitAt),
-            hours: ordinaryHours,
-            isExtra: false,
-          });
-        }
-
-        if (extraHours > 0) {
-          result.push({
-            ...segment,
-            start: new Date(splitAt),
-            hours: extraHours,
-            isExtra: true,
-          });
-        }
-
-        usedHours += segment.hours;
+      if (ordinary > 0) {
+        result.push({
+          ...segment,
+          end: new Date(splitAt),
+          hours: ordinary,
+          isExtra: false,
+        });
       }
+
+      if (extra > 0) {
+        result.push({
+          ...segment,
+          start: new Date(splitAt),
+          hours: extra,
+          isExtra: true,
+        });
+      }
+
+      ordinaryHours.byWorkday.set(workday, dayHours + ordinary);
+      ordinaryHours.byWeek.set(week, weekHours + ordinary);
     }
 
-    return result.sort((a, b) => a.start.getTime() - b.start.getTime());
+    return result;
   }
 
   private getColombiaDate(date: Date): string {

@@ -13,6 +13,11 @@ import { EmployeeResponseDto } from '../../infraestructure/http/dtos/employee-re
 import { Employee } from 'src/entities/employee.model';
 import { DocumentId } from '../../domain/value-objects/document-id.vo';
 import { Salary } from '../../domain/value-objects/salary.vo';
+import { formatCurrency } from 'src/modules/nomina/domain/payroll-calculation';
+import {
+  SYSTEM_CONFIG_REPOSITORY_PORT,
+  type SystemConfigRepositoryPort,
+} from 'src/modules/nomina/domain/ports/system-config-repository.port';
 import { HireDate } from '../../domain/value-objects/hire-date.vo';
 import { getColombiaDate } from 'src/shared/common/utils/colombia-date.util';
 import { DuplicateDocumentError } from '../../domain/errors/employee.errors';
@@ -49,9 +54,24 @@ export class EmployeeService {
     @Inject(WORKDAY_CONFIG_REPOSITORY_PORT)
     private readonly workdayConfigRepository: WorkdayConfigRepositoryPort,
 
+    @Inject(SYSTEM_CONFIG_REPOSITORY_PORT)
+    private readonly systemConfigRepository: SystemConfigRepositoryPort,
+
     @Inject(AUDIT_PORT)
     private readonly auditPort: AuditPort,
   ) {}
+
+  private async validarSalarioMinimo(salario: number): Promise<void> {
+    const minimo = await this.systemConfigRepository.getValue(
+      'MINIMUM_WAGE',
+      new Date(),
+    );
+    if (minimo !== null && salario < minimo) {
+      throw new BadRequestException(
+        `El salario base no puede ser inferior al salario mínimo vigente (${formatCurrency(minimo)}).`,
+      );
+    }
+  }
 
   // Solo se puede asignar la jornada vigente hoy: las históricas o programadas se rechazan
   private async obtenerJornadaAsignable(
@@ -72,6 +92,7 @@ export class EmployeeService {
     // Los value objects validan tipo/número de documento y salario (lanzan error de dominio si son inválidos)
     const document = DocumentId.create(dto.documentType, dto.documentNumber);
     const salary = Salary.create(dto.salaryBase);
+    await this.validarSalarioMinimo(salary.getvalue());
     const hireDate =
       dto.hireDate === undefined
         ? null
@@ -282,7 +303,13 @@ export class EmployeeService {
     if (dto.phone !== undefined) employee.phone = dto.phone;
     if (dto.salaryBase !== undefined) {
       // Misma regla que al registrar: el salario debe ser mayor que cero
-      employee.salary_base = Salary.create(dto.salaryBase).getvalue();
+      const salary = Salary.create(dto.salaryBase).getvalue();
+      // Solo se valida si cambia, para poder editar los demás datos de un
+      // empleado cuyo salario quedó por debajo de un mínimo nuevo.
+      if (salary !== Number(employee.salary_base)) {
+        await this.validarSalarioMinimo(salary);
+      }
+      employee.salary_base = salary;
     }
     if (dto.hireDate !== undefined) {
       employee.hire_date = HireDate.create(
