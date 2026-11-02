@@ -14,6 +14,8 @@ describe('LoanController', () => {
     obtenerPorId: jest.fn(),
     obtenerTodos: jest.fn(),
     obtenerIndicadores: jest.fn(),
+    actualizar: jest.fn(),
+    eliminar: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -110,5 +112,19 @@ describe('LoanController', () => {
       expect(loanServiceMock.obtenerIndicadores).toHaveBeenCalledTimes(1);
       expect(loanServiceMock.obtenerIndicadores).toHaveBeenCalledWith();
     });
+  });
+
+  it('delega la actualización y la eliminación al servicio', async () => {
+    loanServiceMock.actualizar.mockResolvedValue({ id: 1 });
+
+    await expect(
+      controller.actualizar(1, { totalAmount: 500 }),
+    ).resolves.toEqual({ id: 1 });
+    await controller.eliminar(1);
+
+    expect(loanServiceMock.actualizar).toHaveBeenCalledWith(1, {
+      totalAmount: 500,
+    });
+    expect(loanServiceMock.eliminar).toHaveBeenCalledWith(1);
   });
 });
