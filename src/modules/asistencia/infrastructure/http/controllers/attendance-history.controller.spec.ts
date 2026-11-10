@@ -14,6 +14,7 @@ describe('AttendanceHistoryController', () => {
 
   const attendanceHistoryServiceMock = {
     consultarHistorial: jest.fn(),
+    actualizarHoraSalida: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -126,6 +127,23 @@ describe('AttendanceHistoryController', () => {
       attendanceHistoryServiceMock.consultarHistorial.mockRejectedValue(error);
 
       await expect(controller.consultarHistorial({})).rejects.toBe(error);
+    });
+  });
+
+  describe('actualizarHoraSalida', () => {
+    it('debe delegar al servicio el ID del registro y los datos validados', async () => {
+      const body = { empleadoId: 7, horaSalida: '17:30' };
+      const response = { id: 15, empleadoId: 7, checkOut: new Date() };
+      attendanceHistoryServiceMock.actualizarHoraSalida.mockResolvedValue(
+        response,
+      );
+
+      await expect(controller.actualizarHoraSalida(15, body)).resolves.toBe(
+        response,
+      );
+      expect(
+        attendanceHistoryServiceMock.actualizarHoraSalida,
+      ).toHaveBeenCalledWith(15, body);
     });
   });
 });

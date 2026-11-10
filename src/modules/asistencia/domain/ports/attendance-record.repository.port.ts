@@ -23,7 +23,21 @@ export interface AttendanceHistoryPage {
 }
 
 export interface AttendanceRecordRepositoryPort {
-  findHistory(filters: AttendanceHistoryFilters): Promise<AttendanceHistoryPage>;
+  findHistory(
+    filters: AttendanceHistoryFilters,
+  ): Promise<AttendanceHistoryPage>;
+
+  findByIdAndEmployee(
+    id: number,
+    empleadoId: number,
+  ): Promise<AttendanceRecord | null>;
+
+  updateCheckOutIfIncomplete(
+    id: number,
+    empleadoId: number,
+    checkOut: Date,
+    workMinutes: number,
+  ): Promise<boolean>;
 
   /**
    * Registros cuya entrada está en el rango [desde, hasta), con su empleado y

@@ -15,8 +15,12 @@ describe('AttendanceHistoryService', () => {
 
   const attendanceRecordRepositoryMock: {
     findHistory: jest.Mock;
+    findByIdAndEmployee: jest.Mock;
+    updateCheckOutIfIncomplete: jest.Mock;
   } = {
     findHistory: jest.fn(),
+    findByIdAndEmployee: jest.fn(),
+    updateCheckOutIfIncomplete: jest.fn(),
   };
 
   const auditPortMock: {
@@ -36,6 +40,9 @@ describe('AttendanceHistoryService', () => {
       records: [],
       total: 0,
     });
+    attendanceRecordRepositoryMock.updateCheckOutIfIncomplete.mockResolvedValue(
+      true,
+    );
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -65,6 +72,123 @@ describe('AttendanceHistoryService', () => {
 
   it('debe estar definido', () => {
     expect(service).toBeDefined();
+  });
+
+  // =========================================================
+  // Actualización de hora de salida
+  // =========================================================
+
+  describe('actualizarHoraSalida', () => {
+    it('debe completar la salida para el empleado y actualizar los minutos', async () => {
+      const registro = crearRegistro({
+        id: 15,
+        check_in: new Date('2026-09-15T13:00:00.000Z'), // 08:00 Colombia
+        check_out: null,
+      });
+      attendanceRecordRepositoryMock.findByIdAndEmployee.mockResolvedValue(
+        registro,
+      );
+
+      const resultado = await service.actualizarHoraSalida(15, {
+        empleadoId: 7,
+        horaSalida: '17:30',
+      });
+
+      expect(
+        attendanceRecordRepositoryMock.updateCheckOutIfIncomplete,
+      ).toHaveBeenCalledWith(15, 7, new Date('2026-09-15T22:30:00.000Z'), 570);
+      expect(resultado).toMatchObject({
+        id: 15,
+        empleadoId: 7,
+        checkOut: new Date('2026-09-15T22:30:00.000Z'),
+        workedMinutes: 570,
+        status: AttendanceRecordStatus.COMPLETO,
+      });
+    });
+
+    it('debe interpretar una salida anterior como el día siguiente en Colombia', async () => {
+      const registro = crearRegistro({
+        id: 15,
+        check_in: new Date('2026-09-16T02:00:00.000Z'), // 21:00 del 15 en Colombia
+        check_out: null,
+      });
+      attendanceRecordRepositoryMock.findByIdAndEmployee.mockResolvedValue(
+        registro,
+      );
+
+      await service.actualizarHoraSalida(15, {
+        empleadoId: 7,
+        horaSalida: '02:00',
+      });
+
+      expect(
+        attendanceRecordRepositoryMock.updateCheckOutIfIncomplete,
+      ).toHaveBeenCalledWith(15, 7, new Date('2026-09-16T07:00:00.000Z'), 300);
+    });
+
+    it('debe rechazar un registro que no corresponde al empleado', async () => {
+      attendanceRecordRepositoryMock.findByIdAndEmployee.mockResolvedValue(
+        null,
+      );
+      await expect(
+        service.actualizarHoraSalida(15, {
+          empleadoId: 8,
+          horaSalida: '17:30',
+        }),
+      ).rejects.toThrow(
+        'No se encontró la asistencia para el empleado indicado.',
+      );
+      expect(
+        attendanceRecordRepositoryMock.updateCheckOutIfIncomplete,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('debe rechazar una asistencia que ya tiene salida', async () => {
+      attendanceRecordRepositoryMock.findByIdAndEmployee.mockResolvedValue(
+        crearRegistro({ check_out: new Date('2026-09-15T21:00:00.000Z') }),
+      );
+      await expect(
+        service.actualizarHoraSalida(15, {
+          empleadoId: 7,
+          horaSalida: '17:30',
+        }),
+      ).rejects.toThrow('La asistencia ya tiene una hora de salida marcada.');
+      expect(
+        attendanceRecordRepositoryMock.updateCheckOutIfIncomplete,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('debe rechazar una salida igual a la hora de entrada', async () => {
+      attendanceRecordRepositoryMock.findByIdAndEmployee.mockResolvedValue(
+        crearRegistro({
+          check_in: new Date('2026-09-15T13:00:00.000Z'),
+          check_out: null,
+        }),
+      );
+      await expect(
+        service.actualizarHoraSalida(15, {
+          empleadoId: 7,
+          horaSalida: '08:00',
+        }),
+      ).rejects.toThrow(
+        'La hora de salida debe ser posterior a la hora de entrada.',
+      );
+    });
+
+    it('debe rechazar la actualización si el registro se cerró en paralelo', async () => {
+      attendanceRecordRepositoryMock.findByIdAndEmployee.mockResolvedValue(
+        crearRegistro({ check_out: null }),
+      );
+      attendanceRecordRepositoryMock.updateCheckOutIfIncomplete.mockResolvedValue(
+        false,
+      );
+      await expect(
+        service.actualizarHoraSalida(15, {
+          empleadoId: 7,
+          horaSalida: '17:30',
+        }),
+      ).rejects.toThrow('La asistencia ya tiene una hora de salida marcada.');
+    });
   });
 
   // =========================================================

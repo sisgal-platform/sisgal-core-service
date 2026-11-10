@@ -11,3 +11,5 @@ export {
   AttendanceTodayEmployeeDto,
   AttendanceTodayResponseDto,
 } from './attendance-today-response.dto';
+export * from './actualizar-hora-salida.dto';
+export * from './actualizar-hora-salida-response.dto';
