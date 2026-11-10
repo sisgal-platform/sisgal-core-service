@@ -1,3 +1,4 @@
+
 name: Backend dev pipeline
 
 on:
@@ -17,7 +18,7 @@ concurrency:
 
 jobs:
   validate:
-    name: Validar configuración y pruebas
+    name: Validar configuración, calidad y pruebas
     runs-on: ubuntu-latest
 
     steps:
@@ -32,6 +33,9 @@ jobs:
 
       - name: Instalar dependencias
         run: npm ci
+
+      - name: Analizar código con ESLint
+        run: npm run lint
 
       - name: Ejecutar pruebas
         run: npm test -- --runInBand
