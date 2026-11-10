@@ -4,14 +4,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Employee } from 'src/entities/employee.model';
 import {
   EMPLOYEE_REPOSITORY_PORT,
   type EmployeeRepositoryPort,
 } from 'src/modules/empleados/domain/ports/employee-repository.port';
 import {
   NominaService,
-  type PreLiquidationCalculation,
 } from 'src/modules/nomina/application/services/nomina.service';
 import { PreLiquidationRequestDto } from 'src/modules/nomina/infrastructure/http/dtos/pre-liquidation-request.dto';
 import { PayrollPeriodDetailResponseDto } from '../../infraestructure/http/dtos/payroll-period-detail-response.dto';

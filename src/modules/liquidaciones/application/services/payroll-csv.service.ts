@@ -31,7 +31,7 @@ export class PayrollCsvService {
   // entregar un CSV corrupto o incompleto.
   private validateFormat(buffer: Buffer, expectedRows: number): void {
     const tieneBom = buffer.subarray(0, 3).toString('utf-8') === UTF8_BOM;
-    const texto = buffer.toString('utf-8').replace(/^﻿/, '');
+    const texto = buffer.toString('utf-8').replace(/^\uFEFF/, '');
     const lineas = texto.split('\r\n').filter((linea) => linea.length > 0);
     const encabezadoValido = lineas[0] === EXPECTED_HEADER;
 

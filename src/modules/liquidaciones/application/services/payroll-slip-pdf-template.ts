@@ -1,4 +1,3 @@
-import PDFDocument from 'pdfkit';
 import { getColombiaDate } from 'src/shared/common/utils/colombia-date.util';
 import { PayrollSlipData } from 'src/modules/liquidaciones/domain/payroll-slip';
 
@@ -34,7 +33,7 @@ export function drawPayrollSlip(doc: PDFKit.PDFDocument, data: PayrollSlipData):
   drawEmployeeInfo(doc, data);
   drawConceptsTable(doc, data);
   drawTotals(doc, data);
-  drawFooter(doc, data);
+  drawFooter(doc);
 }
 
 function drawHeader(doc: PDFKit.PDFDocument, data: PayrollSlipData): void {
@@ -163,7 +162,7 @@ function drawTotals(doc: PDFKit.PDFDocument, data: PayrollSlipData): void {
   });
 }
 
-function drawFooter(doc: PDFKit.PDFDocument, _data: PayrollSlipData): void {
+function drawFooter(doc: PDFKit.PDFDocument): void {
   doc.moveDown(2);
   doc
     .fillColor(MUTED_COLOR)

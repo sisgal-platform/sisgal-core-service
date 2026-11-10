@@ -52,5 +52,5 @@ export interface AuditRecord {
   metadata: AuditMetadataRecord[];
   error: AuditErrorRecord | null;
   /** Estado completo del recurso después del evento; ya sin datos sensibles. */
-  snapshot: unknown | null;
+  snapshot: unknown;
 }

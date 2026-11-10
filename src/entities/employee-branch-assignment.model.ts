@@ -4,8 +4,6 @@ import {
   PrimaryGeneratedColumn,
   ManyToOne,
   JoinColumn,
-  OneToMany,
-  PrimaryColumn,
 } from 'typeorm';
 import { Employee } from './employee.model';
 import { Branch } from './branch.model';

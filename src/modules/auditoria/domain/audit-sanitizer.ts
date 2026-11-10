@@ -95,7 +95,7 @@ export function toAuditText(value: unknown): string | null {
 export function toBoundedSnapshot(
   value: unknown,
   maxChars = MAX_SNAPSHOT_CHARS,
-): { snapshot: unknown | null; omitted: boolean } {
+): { snapshot: unknown; omitted: boolean } {
   if (value === null || value === undefined) {
     return { snapshot: null, omitted: false };
   }
