@@ -1,4 +1,10 @@
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { AUDIT_PORT } from 'src/application/ports/audit/audit.port';
 import type { AuditPort } from 'src/application/ports/audit/audit.port';
 import {
@@ -14,6 +20,15 @@ import {
   AttendanceHistoryResponseDto,
   HistorialAsistenciaQueryDto,
 } from '../../infrastructure/http/dtos';
+import {
+  ActualizarHoraSalidaDto,
+  ActualizarHoraSalidaResponseDto,
+} from '../../infrastructure/http/dtos';
+import { AttendanceRecordStatus } from '../../domain/value-objects/attendance-record-status.enum';
+import {
+  getColombiaDate,
+  getColombiaMinutes,
+} from 'src/shared/common/utils/colombia-date.util';
 
 const FECHA_MINIMA = '1900-01-01';
 const PAGINA_INICIAL = 1;
@@ -92,6 +107,81 @@ export class AttendanceHistoryService {
 
       throw error;
     }
+  }
+
+  async actualizarHoraSalida(
+    id: number,
+    dto: ActualizarHoraSalidaDto,
+  ): Promise<ActualizarHoraSalidaResponseDto> {
+    const record = await this.attendanceRecordRepository.findByIdAndEmployee(
+      id,
+      dto.empleadoId,
+    );
+    if (!record) {
+      throw new NotFoundException(
+        'No se encontró la asistencia para el empleado indicado.',
+      );
+    }
+    if (record.check_out) {
+      throw new ConflictException(
+        'La asistencia ya tiene una hora de salida marcada.',
+      );
+    }
+
+    const [hora, minuto] = dto.horaSalida.split(':').map(Number);
+    let fechaSalida = getColombiaDate(record.check_in);
+    const minutosEntrada = getColombiaMinutes(record.check_in);
+    const minutosSalida = hora * 60 + minuto;
+    if (minutosSalida <= minutosEntrada) {
+      if (minutosSalida === minutosEntrada) {
+        throw new BadRequestException(
+          'La hora de salida debe ser posterior a la hora de entrada.',
+        );
+      }
+      const siguienteDia = new Date(`${fechaSalida}T00:00:00Z`);
+      siguienteDia.setUTCDate(siguienteDia.getUTCDate() + 1);
+      fechaSalida = siguienteDia.toISOString().slice(0, 10);
+    }
+
+    const checkOut = new Date(`${fechaSalida}T${dto.horaSalida}:00-05:00`);
+    const workMinutes = Math.floor(
+      (checkOut.getTime() - record.check_in.getTime()) / 60_000,
+    );
+    const updated =
+      await this.attendanceRecordRepository.updateCheckOutIfIncomplete(
+        id,
+        dto.empleadoId,
+        checkOut,
+        workMinutes,
+      );
+    if (!updated) {
+      throw new ConflictException(
+        'La asistencia ya tiene una hora de salida marcada.',
+      );
+    }
+
+    this.auditPort.log({
+      action: 'ATTENDANCE_CHECK_OUT_UPDATED',
+      module: 'Asistencia',
+      resource: 'AttendanceRecord',
+      result: 'SUCCESS',
+      message: 'Se completó la hora de salida de una asistencia.',
+      metadata: {
+        attendanceRecordId: id,
+        empleadoId: dto.empleadoId,
+        checkOut,
+        workMinutes,
+      },
+    });
+
+    const response = new ActualizarHoraSalidaResponseDto();
+    response.id = id;
+    response.empleadoId = dto.empleadoId;
+    response.checkIn = record.check_in;
+    response.checkOut = checkOut;
+    response.workedMinutes = workMinutes;
+    response.status = AttendanceRecordStatus.COMPLETO;
+    return response;
   }
 
   private validarRangoFechas(fechaDesde?: string, fechaHasta?: string): void {

@@ -12,6 +12,7 @@ describe('AttendanceRecordTypeOrmRepository', () => {
 
   const queryBuilderMock = {
     innerJoinAndSelect: jest.fn(),
+    innerJoin: jest.fn(),
     leftJoinAndSelect: jest.fn(),
     where: jest.fn(),
     andWhere: jest.fn(),
@@ -21,6 +22,10 @@ describe('AttendanceRecordTypeOrmRepository', () => {
     limit: jest.fn(),
     getManyAndCount: jest.fn(),
     getMany: jest.fn(),
+    getOne: jest.fn(),
+    update: jest.fn(),
+    set: jest.fn(),
+    execute: jest.fn(),
   };
 
   const attendanceRecordRepositoryMock = {
@@ -32,6 +37,7 @@ describe('AttendanceRecordTypeOrmRepository', () => {
       queryBuilderMock,
     );
     queryBuilderMock.innerJoinAndSelect.mockReturnValue(queryBuilderMock);
+    queryBuilderMock.innerJoin.mockReturnValue(queryBuilderMock);
     queryBuilderMock.leftJoinAndSelect.mockReturnValue(queryBuilderMock);
     queryBuilderMock.where.mockReturnValue(queryBuilderMock);
     queryBuilderMock.andWhere.mockReturnValue(queryBuilderMock);
@@ -41,6 +47,10 @@ describe('AttendanceRecordTypeOrmRepository', () => {
     queryBuilderMock.limit.mockReturnValue(queryBuilderMock);
     queryBuilderMock.getManyAndCount.mockResolvedValue([[], 0]);
     queryBuilderMock.getMany.mockResolvedValue([]);
+    queryBuilderMock.getOne.mockResolvedValue(null);
+    queryBuilderMock.update.mockReturnValue(queryBuilderMock);
+    queryBuilderMock.set.mockReturnValue(queryBuilderMock);
+    queryBuilderMock.execute.mockResolvedValue({ affected: 1 });
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -236,6 +246,50 @@ describe('AttendanceRecordTypeOrmRepository', () => {
       await expect(repository.findCheckInsBetween(desde, hasta)).resolves.toBe(
         registros,
       );
+    });
+  });
+
+  describe('actualización de hora de salida', () => {
+    it('debe buscar un registro por ID y empleado', async () => {
+      const record = new AttendanceRecord();
+      queryBuilderMock.getOne.mockResolvedValue(record);
+
+      await expect(repository.findByIdAndEmployee(15, 7)).resolves.toBe(record);
+      expect(queryBuilderMock.where).toHaveBeenCalledWith('record.id = :id', {
+        id: 15,
+      });
+      expect(queryBuilderMock.andWhere).toHaveBeenCalledWith(
+        'employee.id = :empleadoId',
+        { empleadoId: 7 },
+      );
+    });
+
+    it('debe actualizar solo si la salida sigue vacía y coincide el empleado', async () => {
+      const checkOut = new Date('2026-09-15T22:30:00.000Z');
+      await expect(
+        repository.updateCheckOutIfIncomplete(15, 7, checkOut, 570),
+      ).resolves.toBe(true);
+      expect(queryBuilderMock.set).toHaveBeenCalledWith({
+        check_out: checkOut,
+        work_minutes: 570,
+      });
+      expect(queryBuilderMock.where).toHaveBeenCalledWith('id = :id', {
+        id: 15,
+      });
+      expect(queryBuilderMock.andWhere).toHaveBeenCalledWith(
+        'employee_id = :empleadoId',
+        { empleadoId: 7 },
+      );
+      expect(queryBuilderMock.andWhere).toHaveBeenCalledWith(
+        'check_out IS NULL',
+      );
+    });
+
+    it('debe indicar cuando el registro dejó de estar incompleto', async () => {
+      queryBuilderMock.execute.mockResolvedValue({ affected: 0 });
+      await expect(
+        repository.updateCheckOutIfIncomplete(15, 7, new Date(), 60),
+      ).resolves.toBe(false);
     });
   });
 });

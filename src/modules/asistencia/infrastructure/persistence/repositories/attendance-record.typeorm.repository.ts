@@ -57,6 +57,36 @@ export class AttendanceRecordTypeOrmRepository implements AttendanceRecordReposi
     return { records, total };
   }
 
+  findByIdAndEmployee(
+    id: number,
+    empleadoId: number,
+  ): Promise<AttendanceRecord | null> {
+    return this.repository
+      .createQueryBuilder('record')
+      .innerJoin('record.employee', 'employee')
+      .where('record.id = :id', { id })
+      .andWhere('employee.id = :empleadoId', { empleadoId })
+      .getOne();
+  }
+
+  async updateCheckOutIfIncomplete(
+    id: number,
+    empleadoId: number,
+    checkOut: Date,
+    workMinutes: number,
+  ): Promise<boolean> {
+    const result = await this.repository
+      .createQueryBuilder()
+      .update(AttendanceRecord)
+      .set({ check_out: checkOut, work_minutes: workMinutes })
+      .where('id = :id', { id })
+      .andWhere('employee_id = :empleadoId', { empleadoId })
+      .andWhere('check_out IS NULL')
+      .execute();
+
+    return (result.affected ?? 0) === 1;
+  }
+
   async findCheckInsBetween(
     desde: Date,
     hasta: Date,
