@@ -28,6 +28,33 @@ export function valuesDiffer(before: unknown, after: unknown): boolean {
   return normalize(before) !== normalize(after);
 }
 
+function formatRecordId(recordId: unknown): string {
+  if (recordId === null || recordId === undefined) {
+    return '?';
+  }
+  if (typeof recordId === 'object') {
+    try {
+      return JSON.stringify(recordId) ?? '[unserializable]';
+    } catch {
+      return '[unserializable]';
+    }
+  }
+  if (typeof recordId === 'string') {
+    return recordId;
+  }
+  if (
+    typeof recordId === 'number' ||
+    typeof recordId === 'boolean' ||
+    typeof recordId === 'bigint'
+  ) {
+    return recordId.toString();
+  }
+  if (typeof recordId === 'symbol') {
+    return recordId.description ?? recordId.toString();
+  }
+  return '[unserializable]';
+}
+
 /**
  * Describe el cambio de un campo, o devuelve null si el valor en realidad no
  * cambió. El nombre incluye la tabla y el id del registro porque una misma
@@ -45,7 +72,7 @@ export function describeFieldChange(
   }
 
   return {
-    fieldName: `${table}[${String(recordId ?? '?')}].${property}`,
+    fieldName: `${table}[${formatRecordId(recordId)}].${property}`,
     oldValue: toAuditText(before),
     newValue: toAuditText(after),
   };

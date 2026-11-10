@@ -187,7 +187,10 @@ export function buildRequestAuditInput(
   // se deja constancia de lo que llegó en vez de perderlo.
   const rawUserId = request.user?.id;
   if (rawUserId !== undefined && !isUuid(rawUserId)) {
-    metadata.invalid_user_id = truncate(String(rawUserId), MAX_SHORT_TEXT);
+    metadata.invalid_user_id = truncate(
+      formatInvalidUserId(rawUserId),
+      MAX_SHORT_TEXT,
+    );
   }
 
   return {
@@ -210,4 +213,19 @@ export function buildRequestAuditInput(
 
 function truncateOrNull(value: string | null): string | null {
   return value === null ? null : truncate(value, MAX_USER_AGENT);
+}
+
+function formatInvalidUserId(value: unknown): string {
+  if (
+    value === null ||
+    ['string', 'number', 'boolean', 'bigint', 'symbol'].includes(typeof value)
+  ) {
+    return String(value);
+  }
+
+  try {
+    return JSON.stringify(value) ?? '[unserializable]';
+  } catch {
+    return '[unserializable]';
+  }
 }

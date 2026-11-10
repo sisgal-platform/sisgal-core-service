@@ -151,10 +151,10 @@ export class DisabilityLeaveService {
     }
 
     const description =
-      type === DisabilityType.OTROS
+      String(type) === String(DisabilityType.OTROS)
         ? (dto.otherTypeDescription ?? current.other_type_description)?.trim()
         : null;
-    if (type === DisabilityType.OTROS && !description) {
+    if (String(type) === String(DisabilityType.OTROS) && !description) {
       throw new BadRequestException(
         'Describe el tipo de incapacidad o licencia.',
       );
