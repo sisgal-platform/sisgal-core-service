@@ -1,5 +1,9 @@
 import { Module } from '@nestjs/common';
 import { dataSourceOptions } from './config/DataSource';
+import {
+  AUDIT_DATA_SOURCE,
+  auditDataSourceOptions,
+} from './config/AuditDataSource';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { EmployeeModule } from './modules/empleados/employee.module';
 import { SucursalesModule } from './modules/sucursales/sucursales.module';
@@ -16,6 +20,8 @@ import { AuditoriaModule } from './modules/auditoria/auditoria.module';
 @Module({
   imports: [
     TypeOrmModule.forRoot({ ...dataSourceOptions, autoLoadEntities: true }),
+    // Segunda conexión: la auditoría vive en su propia base de datos.
+    TypeOrmModule.forRoot({ ...auditDataSourceOptions, name: AUDIT_DATA_SOURCE }),
     EmployeeModule,
     SucursalesModule,
     CargosModule,

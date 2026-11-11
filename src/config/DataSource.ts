@@ -28,20 +28,11 @@ import { VersionSystemConfigValidity1791740000000 } from '../migrations/17917400
 import { AddLoanInstallments1791810000000 } from '../migrations/1791810000000-AddLoanInstallments';
 import { AddEmployeeHireDateAndServiceBonusDays1791820000000 } from '../migrations/1791820000000-AddEmployeeHireDateAndServiceBonusDays';
 import { AddAttendanceLogMethodAndIdempotency1791830000000 } from '../migrations/1791830000000-AddAttendanceLogMethodAndIdempotency';
-import { CreateAuditoriaSchema1791840000000 } from '../migrations/1791840000000-CreateAuditoriaSchema';
 import { AddWeeklyLoanPeriodicity1791850000000 } from '../migrations/1791850000000-AddWeeklyLoanPeriodicity';
-import {
-  AuditError,
-  AuditEvent,
-  AuditFieldChange,
-  AuditMetadata,
-  AuditSnapshot,
-  AuditUser,
-  EmployeeLoan,
-  Holiday,
-  LoanInstallment,
-} from 'src/entities';
+import { EmployeeLoan, Holiday, LoanInstallment } from 'src/entities';
 
+// Base de datos del negocio. La auditoría (entidades Audit* y la migración
+// CreateAuditoriaSchema) vive en su propia base de datos: ver AuditDataSource.
 export const dataSourceOptions: DataSourceOptions = {
   type: 'postgres',
   url: process.env.SUPABASE_DB_URL,
@@ -66,12 +57,6 @@ export const dataSourceOptions: DataSourceOptions = {
     EmployeeLoan,
     Holiday,
     LoanInstallment,
-    AuditUser,
-    AuditEvent,
-    AuditFieldChange,
-    AuditMetadata,
-    AuditError,
-    AuditSnapshot,
   ],
   ssl: { rejectUnauthorized: false },
   migrations: [
@@ -87,7 +72,6 @@ export const dataSourceOptions: DataSourceOptions = {
     AddLoanInstallments1791810000000,
     AddEmployeeHireDateAndServiceBonusDays1791820000000,
     AddAttendanceLogMethodAndIdempotency1791830000000,
-    CreateAuditoriaSchema1791840000000,
     AddWeeklyLoanPeriodicity1791850000000,
   ],
 };
