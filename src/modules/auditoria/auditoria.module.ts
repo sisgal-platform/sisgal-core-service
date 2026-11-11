@@ -9,6 +9,7 @@ import {
   AuditSnapshot,
   AuditUser,
 } from 'src/entities';
+import { AUDIT_DATA_SOURCE } from 'src/config/AuditDataSource';
 import { AuditService } from './application/services/audit.service';
 import { AUDIT_RECORD_REPOSITORY_PORT } from './domain/ports/audit-record.repository.port';
 import { AuditExceptionFilter } from './infrastructure/http/audit-exception.filter';
@@ -25,17 +26,24 @@ import { AuditRecordTypeOrmRepository } from './infrastructure/persistence/repos
  * - el suscriptor de TypeORM detecta qué campos cambiaron y de qué valor a cuál.
  *
  * No expone ningún endpoint: la auditoría solo se escribe desde el backend.
+ *
+ * Los registros se guardan en una base de datos aparte (conexión
+ * `AUDIT_DATA_SOURCE`); el suscriptor, en cambio, escucha la conexión
+ * principal, que es donde ocurren los cambios del negocio.
  */
 @Module({
   imports: [
-    TypeOrmModule.forFeature([
-      AuditUser,
-      AuditEvent,
-      AuditFieldChange,
-      AuditMetadata,
-      AuditError,
-      AuditSnapshot,
-    ]),
+    TypeOrmModule.forFeature(
+      [
+        AuditUser,
+        AuditEvent,
+        AuditFieldChange,
+        AuditMetadata,
+        AuditError,
+        AuditSnapshot,
+      ],
+      AUDIT_DATA_SOURCE,
+    ),
   ],
   providers: [
     AuditService,

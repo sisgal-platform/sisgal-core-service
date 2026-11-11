@@ -9,13 +9,15 @@ import {
   AuditSnapshot,
   AuditUser,
 } from 'src/entities';
+import { AUDIT_DATA_SOURCE } from 'src/config/AuditDataSource';
 import type { AuditRecord } from '../../../domain/audit-record';
 import type { AuditRecordRepositoryPort } from '../../../domain/ports/audit-record.repository.port';
 
 @Injectable()
 export class AuditRecordTypeOrmRepository implements AuditRecordRepositoryPort {
   constructor(
-    @InjectDataSource()
+    // La auditoría se escribe en su propia base de datos, no en la del negocio.
+    @InjectDataSource(AUDIT_DATA_SOURCE)
     private readonly dataSource: DataSource,
   ) {}
 
